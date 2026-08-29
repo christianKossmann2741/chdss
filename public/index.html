@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Christian's Handy Dandy Screen Share — private, low-latency LAN streaming.">
+  <title>CHDSS — Viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="viewer-page">
+  <main class="viewer-shell">
+    <header>
+      <div><p class="eyebrow">CHDSS · LOCAL WEBRTC</p><h1>Christian's Handy Dandy <span>Screen Share</span></h1></div>
+      <div id="connectionBadge" class="badge waiting">Waiting for host</div>
+    </header>
+    <section class="stage">
+      <video id="stream" autoplay playsinline controls></video>
+      <div id="emptyState" class="empty-state"><div class="pulse"></div><h2>Connecting to screen share</h2><p>The feed will appear when the host starts broadcasting.</p></div>
+      <div class="controls">
+        <button id="playButton" type="button">Play with audio</button>
+        <button id="pipButton" type="button" disabled>Picture in Picture</button>
+        <button id="fullscreenButton" type="button" disabled>Fullscreen</button>
+      </div>
+    </section>
+    <footer><span>Peer-to-peer on your local network.</span><span id="stats">No media received</span></footer>
+  </main>
+  <script type="module" src="/viewer.js"></script>
+</body>
+</html>
