@@ -33,3 +33,9 @@ test('preload file URL is converted to a native path for Windows', async () => {
   const main = await read('src/main.js');
   assert.match(main, /fileURLToPath\(new URL\('\.\/preload\.cjs', import\.meta\.url\)\)/);
 });
+
+test('host connects even when source enumeration is denied', async () => {
+  const script = await read('public/host.js');
+  assert.match(script, /connect\(\);\s*try\s*{\s*for \(const source of await window\.chdss\.sources\(\)\)/s);
+  assert.match(script, /catch \(error\)\s*{\s*setError\(/s);
+});

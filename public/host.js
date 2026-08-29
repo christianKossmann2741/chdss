@@ -152,11 +152,16 @@ async function startShare() {
 const details = await window.chdss.details();
 $('viewerUrl').value = details.viewerUrls[0];
 $('permissionNotice').classList.toggle('hidden', details.screenPermission !== 'denied');
-for (const source of await window.chdss.sources()) {
-  const option = document.createElement('option');
-  option.value = source.id;
-  option.textContent = source.name;
-  $('source').append(option);
+connect();
+try {
+  for (const source of await window.chdss.sources()) {
+    const option = document.createElement('option');
+    option.value = source.id;
+    option.textContent = source.name;
+    $('source').append(option);
+  }
+} catch (error) {
+  setError(`Could not list screens or windows: ${error.message}. Grant screen-recording access, then restart CHDSS.`);
 }
 $('shareButton').disabled = !$('source').value;
 $('copyUrl').onclick = async () => { await window.chdss.copy($('viewerUrl').value); $('copyUrl').textContent = 'Copied'; setTimeout(() => { $('copyUrl').textContent = 'Copy'; }, 1200); };
@@ -164,4 +169,3 @@ $('permissions').onclick = () => window.chdss.openPermissions();
 $('shareButton').onclick = startShare;
 $('stopButton').onclick = stopShare;
 window.addEventListener('beforeunload', stopShare);
-connect();
