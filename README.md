@@ -4,7 +4,7 @@
 
 ## What it does
 
-- Captures a screen or window through Electron/Chromium's native picker
+- Captures a selected screen or window through Electron/Chromium
 - Requires an audio track before broadcasting, preventing accidental silent shares
 - Streams peer-to-peer over LAN WebRTC; media does not pass through a cloud service
 - Uses Opus stereo at 48 kHz with in-band forward-error correction and WebRTC A/V timestamps
@@ -16,7 +16,7 @@
 ## Requirements
 
 - macOS 14.2 or newer, or Windows 11
-- Node.js 20 or newer (the installers check this)
+- Node.js 20 or newer for source installation; the Windows portable build is self-contained
 - Host and viewers on the same LAN/VLAN with client-to-client traffic allowed
 - A current Chromium, Edge, Firefox, or Safari browser; PiP depends on that browser's support
 
@@ -33,9 +33,13 @@ chdss
 
 The default locations are `~/.local/share/chdss` and `~/.local/bin/chdss`. Override them with `CHDSS_HOME` and `CHDSS_BIN_DIR`. If `~/.local/bin` is not on PATH, the installer prints the exact line to add.
 
-On first use, macOS asks for **Screen & System Audio Recording** permission. Grant it to Electron/CHDSS, then restart `chdss`. When the native picker appears, enable **Share audio**.
+On first use, macOS asks for **Screen & System Audio Recording** permission. Grant it to Electron/CHDSS, then restart `chdss`.
 
 ### Windows 11 (PowerShell)
+
+For the portable edition, download `CHDSS-*-Windows-Portable.exe` from the latest GitHub release and run it directly. It includes Electron and Node.js, requires no npm, Git, administrator access, PATH changes, or uninstaller, and can be moved or deleted as a single file. Electron may still create ordinary temporary files and Chromium cache data while running. Windows SmartScreen may warn because the executable is not code-signed; use **More info → Run anyway** only if it came from this repository.
+
+The source installer remains available for development:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
@@ -49,8 +53,8 @@ The installer uses `%LOCALAPPDATA%\CHDSS`, creates `%LOCALAPPDATA%\CHDSS-command
 
 1. Run `chdss` on the computer whose screen will be shared.
 2. Choose quality, frame rate, and bitrate. Start with **1080p / 60 FPS / 8 Mbps** on wired or strong Wi-Fi; use **720p / 30 FPS / 2.5–5 Mbps** for a less stable connection.
-3. Click **Choose screen & start sharing**.
-4. In the system picker, select the screen/window and enable **Share audio**.
+3. Select the screen or window in CHDSS.
+4. Click **Start sharing**.
 5. Confirm the host's green audio meter moves. CHDSS refuses to start if the browser supplies no audio track.
 6. Send the viewer link only to people on the same local network. Anyone holding the current link can watch until CHDSS exits.
 7. On the viewer, click **Play with audio** if browser autoplay policy muted or paused the feed. Use **Picture in Picture** when enabled.

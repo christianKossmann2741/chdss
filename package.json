@@ -1,6 +1,6 @@
 {
   "name": "chdss",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Christian's Handy Dandy Screen Share — low-latency LAN screen and audio sharing",
   "type": "module",
   "main": "src/main.js",
@@ -11,14 +11,36 @@
     "start": "electron .",
     "test": "node --test",
     "check": "node --check src/main.js && node --check src/server.js && node --check src/config.js && node --check public/webrtc.js && node --check public/host.js && node --check public/viewer.js",
-    "test:install": "node --test test/install.test.js"
+    "test:install": "node --test test/install.test.js",
+    "dist:win": "electron-builder --win portable --x64"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "electron": "^44.0.0",
     "ws": "^8.18.3"
   },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.christiankossmann.chdss",
+    "productName": "CHDSS",
+    "asar": true,
+    "artifactName": "CHDSS-${version}-Windows-Portable.${ext}",
+    "files": [
+      "src/**/*",
+      "public/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "portable"
+    }
+  },
+  "author": "Christian Kossmann",
   "license": "MIT"
 }
