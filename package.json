@@ -1,6 +1,6 @@
 {
   "name": "chdss",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Christian's Handy Dandy Screen Share — low-latency LAN screen and audio sharing",
   "type": "module",
   "main": "src/main.js",
@@ -12,7 +12,8 @@
     "test": "node --test",
     "check": "node --check src/main.js && node --check src/server.js && node --check src/config.js && node --check public/webrtc.js && node --check public/host.js && node --check public/viewer.js",
     "test:install": "node --test test/install.test.js",
-    "dist:win": "electron-builder --win portable --x64"
+    "dist:win": "electron-builder --win portable --x64",
+    "dist:mac": "electron-builder --mac dir --arm64"
   },
   "engines": {
     "node": ">=20"
@@ -39,6 +40,14 @@
     },
     "win": {
       "target": "portable"
+    },
+    "mac": {
+      "target": "dir",
+      "category": "public.app-category.utilities",
+      "extendInfo": {
+        "NSAudioCaptureUsageDescription": "CHDSS captures system audio so it can be shared with viewers on your local network.",
+        "NSScreenCaptureUsageDescription": "CHDSS captures the screen or window you select so it can be shared with viewers on your local network."
+      }
     }
   },
   "author": "Christian Kossmann",

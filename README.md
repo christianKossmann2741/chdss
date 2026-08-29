@@ -16,7 +16,7 @@
 ## Requirements
 
 - macOS 14.2 or newer, or Windows 11
-- Node.js 20 or newer for source installation; the Windows portable build is self-contained
+- Node.js 20 or newer for source installation; the packaged Windows and macOS builds are self-contained
 - Host and viewers on the same LAN/VLAN with client-to-client traffic allowed
 - A current Chromium, Edge, Firefox, or Safari browser; PiP depends on that browser's support
 
@@ -25,6 +25,10 @@
 Clone or download this repository first.
 
 ### macOS
+
+Download `CHDSS-*-macOS-arm64.zip` from the latest GitHub release, extract `CHDSS.app`, and move it to Applications. The packaged app is self-contained and does not require Node.js or npm. It is ad-hoc signed but not Apple-notarized, so the first launch may require **right-click → Open**.
+
+The source installer remains available for development:
 
 ```bash
 ./install.sh
@@ -67,6 +71,8 @@ CHDSS requests stereo 48 kHz system audio, disables microphone-oriented echo can
 
 No application can guarantee perfect audio over arbitrary Wi-Fi, drivers, browser versions, or hardware. CHDSS instead fails visibly when no audio track exists and exposes enough diagnostics to catch the common failure before sharing the link. For lowest delay and cleanest audio, use Ethernet or 5/6 GHz Wi-Fi and avoid saturating the LAN.
 
+The current Electron loopback backend captures the complete system-output mix, including voice-chat applications such as Discord. Per-application exclusion requires native process-audio capture on each operating system and is not currently available; use headphones and avoid monitoring your own shared stream when a voice call is active.
+
 ## Network and security model
 
 CHDSS listens on all local interfaces on TCP port `41730` by default. Set another port before launch:
@@ -104,6 +110,8 @@ npm ci
 npm test
 npm run check
 npm start
+npm run dist:win
+npm run dist:mac
 ```
 
 The test suite covers configuration, secure pairing, signaling lifecycle and routing, static-file privacy, WebRTC bitrate/audio policy, CLI behavior, and installer invariants.

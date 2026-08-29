@@ -23,10 +23,46 @@ jobs:
       - run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Publish portable executable
-        shell: pwsh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-portable
+          path: dist/*.exe
+          if-no-files-found: error
+
+  macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run check
+      - run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Ad-hoc sign and archive application
+        run: |
+          codesign --force --deep --sign - dist/mac-arm64/CHDSS.app
+          VERSION=$(node -p "require('./package.json').version")
+          ditto -c -k --sequesterRsrc --keepParent dist/mac-arm64/CHDSS.app "dist/CHDSS-${VERSION}-macOS-arm64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-app
+          path: dist/*-macOS-arm64.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [windows-portable, macos-app]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          $artifact = (Get-ChildItem 'dist/*.exe').FullName
-          gh release create $env:GITHUB_REF_NAME $artifact --title "CHDSS $env:GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" release-assets/* --title "CHDSS $GITHUB_REF_NAME" --generate-notes

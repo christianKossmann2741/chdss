@@ -23,5 +23,19 @@ test('Windows packaging produces a self-contained portable executable', async ()
   assert.match(workflow, /actions\/upload-artifact@v4/);
   assert.match(workflow, /dist\/\*\.exe/);
   assert.match(releaseWorkflow, /npm run dist:win/);
+  assert.match(releaseWorkflow, /npm run dist:mac/);
+  assert.match(releaseWorkflow, /ditto -c -k --sequesterRsrc --keepParent/);
+  assert.match(releaseWorkflow, /actions\/upload-artifact/);
+  assert.match(releaseWorkflow, /actions\/download-artifact/);
   assert.match(releaseWorkflow, /gh release create/);
+});
+
+test('macOS packaging produces a self-contained Apple Silicon application', async () => {
+  const manifest = JSON.parse(await read('package.json'));
+
+  assert.equal(manifest.scripts['dist:mac'], 'electron-builder --mac dir --arm64');
+  assert.equal(manifest.build.mac.target, 'dir');
+  assert.equal(manifest.build.mac.category, 'public.app-category.utilities');
+  assert.match(manifest.build.mac.extendInfo.NSAudioCaptureUsageDescription, /system audio/i);
+  assert.match(manifest.build.mac.extendInfo.NSScreenCaptureUsageDescription, /screen/i);
 });
