@@ -2,6 +2,7 @@ import { app, BrowserWindow, clipboard, ipcMain, session, shell, systemPreferenc
 import { desktopCapturer } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { createShareServer } from './server.js';
 import { normalizePort, publicViewerUrl } from './config.js';
 
@@ -56,7 +57,7 @@ async function createWindow() {
     minHeight: 620,
     backgroundColor: '#090b0f',
     title: "Christian's Handy Dandy Screen Share",
-    webPreferences: { preload: new URL('./preload.cjs', import.meta.url).pathname, contextIsolation: true, nodeIntegration: false }
+    webPreferences: { preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)), contextIsolation: true, nodeIntegration: false }
   });
   await mainWindow.loadURL(`${share.localUrl}/host.html#${token}`);
 }

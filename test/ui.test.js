@@ -28,3 +28,8 @@ test('host requests explicit audio constraints and refuses silent capture', asyn
   assert.match(preload, /selectSource/);
   assert.match(markup, /id="source"/);
 });
+
+test('preload file URL is converted to a native path for Windows', async () => {
+  const main = await read('src/main.js');
+  assert.match(main, /fileURLToPath\(new URL\('\.\/preload\.cjs', import\.meta\.url\)\)/);
+});

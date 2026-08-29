@@ -1,6 +1,6 @@
 {
   "name": "chdss",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Christian's Handy Dandy Screen Share — low-latency LAN screen and audio sharing",
   "type": "module",
   "main": "src/main.js",
