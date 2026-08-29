@@ -28,6 +28,7 @@ test('Windows packaging produces a self-contained portable executable', async ()
   assert.match(releaseWorkflow, /actions\/upload-artifact/);
   assert.match(releaseWorkflow, /actions\/download-artifact/);
   assert.match(releaseWorkflow, /gh release create/);
+  assert.match(releaseWorkflow, /--repo "\$GITHUB_REPOSITORY"/);
 });
 
 test('macOS packaging produces a self-contained Apple Silicon application', async () => {
