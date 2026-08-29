@@ -16,7 +16,15 @@ test('viewer reveals video on track and supports browser Picture-in-Picture', as
 });
 
 test('host requests explicit audio constraints and refuses silent capture', async () => {
-  const script = await read('public/host.js');
+  const [script, main, preload, markup] = await Promise.all([
+    read('public/host.js'), read('src/main.js'), read('src/preload.cjs'), read('public/host.html')
+  ]);
   assert.match(script, /audio:\s*audioConstraints\(\)/);
   assert.match(script, /if \(!audioTrack\)/);
+  assert.match(script, /selectSource/);
+  assert.match(main, /useSystemPicker:\s*false/);
+  assert.match(main, /chdss:sources/);
+  assert.match(main, /audio:\s*'loopback'/);
+  assert.match(preload, /selectSource/);
+  assert.match(markup, /id="source"/);
 });

@@ -21,13 +21,14 @@
         <div class="url-row"><input id="viewerUrl" readonly aria-label="Viewer URL"><button id="copyUrl">Copy</button></div>
         <p class="hint">Open this on another device on the same network. The fragment after # is the private pairing code.</p>
         <div class="settings-grid">
+          <label class="source-field">Screen or window<select id="source" aria-label="Screen or window"></select></label>
           <label>Quality<select id="quality"><option value="1080">1080p</option><option value="1440">1440p</option><option value="720">720p</option><option value="native">Native</option></select></label>
           <label>Frame rate<select id="frameRate"><option value="60">60 FPS</option><option value="30">30 FPS</option></select></label>
           <label>Max bitrate<select id="bitrate"><option value="8000000">8 Mbps</option><option value="12000000">12 Mbps</option><option value="5000000">5 Mbps</option><option value="2500000">2.5 Mbps</option></select></label>
         </div>
         <div id="permissionNotice" class="notice hidden"><strong>Screen permission needed.</strong><span>Allow CHDSS in system privacy settings, then restart it.</span><button id="permissions">Open settings</button></div>
         <div id="errorNotice" class="notice error hidden"></div>
-        <button id="shareButton" class="share-button">Choose screen & start sharing</button>
+        <button id="shareButton" class="share-button">Start sharing</button>
         <button id="stopButton" class="stop-button hidden">Stop sharing</button>
       </aside>
     </section>

@@ -7,6 +7,7 @@ import { normalizePort, publicViewerUrl } from './config.js';
 
 let share;
 let mainWindow;
+let selectedSourceId;
 
 function lanAddresses() {
   return Object.values(networkInterfaces()).flat().filter(entry => entry && entry.family === 'IPv4' && !entry.internal).map(entry => entry.address);
@@ -15,8 +16,10 @@ function lanAddresses() {
 async function configureCapture() {
   session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
     const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } });
-    callback({ video: sources[0], audio: 'loopback' });
-  }, { useSystemPicker: true });
+    const source = sources.find(item => item.id === selectedSourceId);
+    selectedSourceId = undefined;
+    callback(source ? { video: source, audio: 'loopback' } : {});
+  }, { useSystemPicker: false });
 }
 
 async function createWindow() {
@@ -35,6 +38,16 @@ async function createWindow() {
   }));
   ipcMain.handle('chdss:copy', (_event, text) => clipboard.writeText(String(text)));
   ipcMain.handle('chdss:permissions', () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' : 'ms-settings:privacy-broadfilesystemaccess'));
+  ipcMain.handle('chdss:sources', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } });
+    return sources.map(source => ({ id: source.id, name: source.name }));
+  });
+  ipcMain.handle('chdss:select-source', async (_event, sourceId) => {
+    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } });
+    const source = sources.find(item => item.id === sourceId);
+    if (!source) throw new Error('The selected screen or window is no longer available.');
+    selectedSourceId = source.id;
+  });
 
   mainWindow = new BrowserWindow({
     width: 1040,
