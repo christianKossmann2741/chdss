@@ -4,36 +4,66 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>CHDSS — Broadcast</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>CHDSS — Broadcast Studio</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body class="host-page">
   <main class="host-shell">
-    <header><div><p class="eyebrow">CHDSS · BROADCAST CONSOLE</p><h1>Christian's Handy Dandy <span>Screen Share</span></h1></div><div id="liveBadge" class="badge waiting">Offline</div></header>
-    <section class="host-grid">
-      <article class="panel preview-panel">
-        <video id="preview" autoplay playsinline muted></video>
-        <div id="previewEmpty" class="empty-state"><h2>Ready when you are</h2><p>Choose a screen or window. Audio is required before CHDSS will broadcast.</p></div>
-        <div id="audioMeter" class="audio-meter" aria-label="Audio level"><i></i></div>
-      </article>
-      <aside class="panel setup-panel">
-        <p class="eyebrow">VIEWER LINK</p>
-        <div class="url-row"><input id="viewerUrl" readonly aria-label="Viewer URL"><button id="copyUrl">Copy</button></div>
-        <p class="hint">Open this on another device on the same network. The fragment after # is the private pairing code.</p>
-        <div class="settings-grid">
-          <label class="source-field">Screen or window<select id="source" aria-label="Screen or window"></select></label>
-          <label>Quality<select id="quality"><option value="1080">1080p</option><option value="1440">1440p</option><option value="720">720p</option><option value="native">Native</option></select></label>
-          <label>Frame rate<select id="frameRate"><option value="60">60 FPS</option><option value="30">30 FPS</option></select></label>
-          <label>Max bitrate<select id="bitrate"><option value="8000000">8 Mbps</option><option value="12000000">12 Mbps</option><option value="5000000">5 Mbps</option><option value="2500000">2.5 Mbps</option></select></label>
+    <header class="app-topbar">
+      <div class="brand"><svg class="signal-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 20V12m7 13V7m8 18V7m7 13V12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span>CHDSS</span><span class="topbar-divider"></span><h1>Broadcast studio</h1></div>
+      <div class="topbar-status"><span id="elapsed" class="mono elapsed">00:00</span><div id="liveBadge" class="badge waiting" role="status">Standby</div></div>
+    </header>
+    <div class="host-grid">
+      <section class="workspace" aria-label="Broadcast preview">
+        <div class="section-heading"><h2>Preview</h2><span class="subtle">Only your selected source is shared</span></div>
+        <div class="preview-panel">
+          <video id="preview" autoplay playsinline muted aria-label="Your screen share preview"></video>
+          <div id="previewEmpty" class="empty-state">
+            <svg class="screen-illustration" viewBox="0 0 240 170" fill="none" aria-hidden="true"><rect x="30" y="22" width="180" height="112" rx="9" stroke="currentColor" stroke-width="1.5"/><path d="M30 115h180M97 153h46m-33-19-3 19m23-19 3 19" stroke="currentColor" stroke-width="1.5"/><path class="illustration-signal" d="M95 79V66m16 25V54m18 37V54m16 25V66" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M16 42V25a17 17 0 0 1 17-17m191 100v23a17 17 0 0 1-17 17" stroke="currentColor" stroke-dasharray="3 5"/></svg>
+            <h2>Your screen. Front and center.</h2><p>Choose a screen or window, then start sharing.<br>Your preview will appear here.</p>
+          </div>
+          <div class="preview-corner" aria-hidden="true">LOCAL PREVIEW</div>
         </div>
-        <div id="permissionNotice" class="notice hidden"><strong>Screen permission needed.</strong><span>Allow CHDSS in system privacy settings, then restart it.</span><button id="permissions">Open settings</button></div>
-        <div id="errorNotice" class="notice error hidden"></div>
-        <button id="shareButton" class="share-button">Start sharing</button>
-        <button id="stopButton" class="stop-button hidden">Stop sharing</button>
+        <div class="preview-caption"><span id="sourceSummary">No source selected</span><span id="streamStats" class="mono">Not broadcasting</span></div>
+        <section class="audio-strip" aria-label="Broadcast audio">
+          <div class="audio-heading"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><div><span class="field-title">System audio</span><span id="audioStatus" class="subtle">Not captured</span></div></div>
+          <div id="audioMeter" class="audio-meter" aria-label="Captured audio level"><i></i></div>
+          <button id="muteAudio" class="quiet-button" type="button" aria-pressed="false" disabled>Mute</button>
+        </section>
+        <div class="workspace-bottom"><span class="brand-caption">Christian’s Handy Dandy Screen Share</span><span><strong id="viewerCount">0</strong> viewers connected</span></div>
+      </section>
+      <aside class="setup-panel" aria-label="Broadcast settings">
+        <section class="inspector-section capture-section">
+          <div class="section-heading"><h2>Source</h2><button id="refreshSources" class="icon-button" type="button" aria-label="Refresh screens and windows" title="Refresh sources"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M16 7a6.5 6.5 0 1 0 .4 5M16 3v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          <label class="field-label" for="source">Screen or window</label><select id="source" aria-label="Screen or window"></select>
+          <label class="check-row"><input id="includeAudio" type="checkbox" checked><span>Include system audio<small>Turn off for a video-only broadcast</small></span></label>
+          <div class="section-heading quality-heading"><h2>Stream quality</h2><span class="subtle">WebRTC</span></div>
+          <label class="field-label" for="preset">Preset</label><select id="preset"><option value="balanced">Balanced · everyday sharing</option><option value="motion">Motion · smooth video</option><option value="detail">Detail · crisp text</option><option value="economy">Economy · less bandwidth</option></select>
+          <div class="settings-grid">
+            <label>Resolution<select id="quality"><option value="1080">1080p</option><option value="1440">1440p</option><option value="720">720p</option><option value="native">Native</option></select></label>
+            <label>Frame rate<select id="frameRate"><option value="30">30 FPS</option><option value="60">60 FPS</option></select></label>
+            <label class="full-width">Maximum bitrate<select id="bitrate"><option value="8000000">8 Mbps</option><option value="12000000">12 Mbps</option><option value="5000000">5 Mbps</option><option value="2500000">2.5 Mbps</option></select></label>
+          </div>
+          <div id="permissionNotice" class="notice hidden" role="status"><strong>Screen permission needed</strong><span>Allow CHDSS in system privacy settings, then restart the app.</span><button id="permissions" type="button">Open settings</button></div>
+          <div id="errorNotice" class="notice error hidden" role="alert"></div>
+          <button id="shareButton" class="primary share-button" type="button">Start sharing</button><button id="stopButton" class="stop-button hidden" type="button">Stop sharing</button>
+        </section>
+        <section class="inspector-section share-section" aria-label="Share access">
+          <div class="section-heading"><h2>Share access</h2><span class="subtle">Private by default</span></div>
+          <div class="segmented" role="group" aria-label="Connection mode"><button id="modeLan" type="button" aria-pressed="true" aria-controls="lanPanel">Local network</button><button id="modeInternet" type="button" aria-pressed="false" aria-controls="internetPanel">Internet</button></div>
+          <div id="lanPanel" class="mode-panel"><label class="field-label" for="viewerUrl">Viewer link</label><div class="url-row"><input id="viewerUrl" readonly spellcheck="false" placeholder="Preparing local link…"><button id="copyUrl" type="button">Copy</button></div><p class="hint">Open on any device on the same network. The pairing code in this link grants access.</p></div>
+          <div id="internetPanel" class="mode-panel hidden">
+            <p class="hint">Add a private session through your relay server. <strong>LAN stays available.</strong></p>
+            <label class="field-label" for="serverUrl">Relay server</label><input id="serverUrl" type="url" placeholder="https://stream.example.com" autocomplete="url" spellcheck="false">
+            <label class="field-label" for="publisherKey">Publisher key</label><input id="publisherKey" type="password" autocomplete="off" placeholder="Your server’s publisher key">
+            <button id="remoteConnect" class="secondary full-width" type="button">Create private session</button><button id="remoteDisconnect" class="stop-button hidden" type="button">End Internet session</button>
+            <p id="remoteStatus" class="hint" role="status">Not connected to a relay server.</p>
+            <div id="remoteInvite" class="remote-invite hidden"><label class="field-label" for="remoteViewerUrl">Private viewer link</label><input id="remoteViewerUrl" readonly spellcheck="false"><label class="field-label" for="streamPassword">Session password</label><div class="url-row"><input id="streamPassword" type="password" readonly autocomplete="off"><button id="revealPassword" type="button" aria-pressed="false">Show</button></div><button id="copyInvite" class="full-width" type="button">Copy invite &amp; password</button><p class="hint">Share only with people you trust. Ending the session revokes access.</p></div>
+          </div>
+        </section>
       </aside>
-    </section>
-    <section class="status-strip"><div><span>Viewers</span><strong id="viewerCount">0</strong></div><div><span>Audio</span><strong id="audioStatus">Not captured</strong></div><div><span>Transport</span><strong>WebRTC · LAN P2P</strong></div></section>
+    </div>
   </main>
-  <script type="module" src="/host.js"></script>
+  <script type="module" src="./host.js"></script>
 </body>
 </html>

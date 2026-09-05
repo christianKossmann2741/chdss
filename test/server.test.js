@@ -37,10 +37,10 @@ test('signaling rejects a wrong pairing token', async (t) => {
 });
 
 test('signaling routes viewer offer, answer, ICE, and disconnect lifecycle', async (t) => {
-  const share = await createShareServer({ port: 0, token: 'right-token', host: '127.0.0.1' });
+  const share = await createShareServer({ port: 0, token: 'right-token', hostToken: 'host-secret', host: '127.0.0.1' });
   t.after(() => share.close());
   const host = await openSocket(share.wsUrl);
-  host.send(JSON.stringify({ type: 'hello', role: 'host', token: 'right-token' }));
+  host.send(JSON.stringify({ type: 'hello', role: 'host', token: 'host-secret' }));
   assert.deepEqual(await nextMessage(host), { type: 'ready', role: 'host' });
 
   const viewer = await openSocket(share.wsUrl);
@@ -59,6 +59,24 @@ test('signaling routes viewer offer, answer, ICE, and disconnect lifecycle', asy
   viewer.close();
   assert.deepEqual(await nextMessage(host), { type: 'viewer-left', viewerId: viewerReady.id });
   host.close();
+});
+
+test('a viewer invitation cannot impersonate the broadcaster', async t => {
+  const share = await createShareServer({ port: 0, token: 'viewer-secret', host: '127.0.0.1' });
+  t.after(() => share.close());
+  const socket = await openSocket(share.wsUrl);
+  socket.send(JSON.stringify({ type: 'hello', role: 'host', token: 'viewer-secret' }));
+  assert.equal((await nextMessage(socket)).code, 'unauthorized');
+});
+
+test('malformed URLs and null signaling do not crash the LAN server', async t => {
+  const share = await createShareServer({ port: 0, token: 'viewer-secret', host: '127.0.0.1' });
+  t.after(() => share.close());
+  assert.equal((await fetch(`${share.localUrl}/%ZZ`)).status, 400);
+  const socket = await openSocket(share.wsUrl);
+  socket.send('null');
+  assert.equal((await nextMessage(socket)).code, 'bad-message');
+  assert.equal((await fetch(`${share.localUrl}/health`)).status, 200);
 });
 
 test('signaling rejects oversized and unexpected messages', async (t) => {

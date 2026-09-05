@@ -18,6 +18,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
       - run: npm run dist:win
@@ -38,6 +39,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
       - run: npm run dist:mac
@@ -46,6 +48,7 @@ jobs:
       - name: Ad-hoc sign and archive application
         run: |
           codesign --force --deep --sign - dist/mac-arm64/CHDSS.app
+          codesign --verify --deep --strict dist/mac-arm64/CHDSS.app
           VERSION=$(node -p "require('./package.json').version")
           ditto -c -k --sequesterRsrc --keepParent dist/mac-arm64/CHDSS.app "dist/CHDSS-${VERSION}-macOS-arm64.zip"
       - uses: actions/upload-artifact@v4
@@ -54,8 +57,33 @@ jobs:
           path: dist/*-macOS-arm64.zip
           if-no-files-found: error
 
+  debian-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm test
+      - run: npm run check
+      - run: npm audit --omit=dev && npm audit --omit=dev --prefix server
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke
+        timeout-minutes: 6
+      - run: bash -n server/chdss-server.sh
+      - run: npm run dist:server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: debian-server
+          path: dist/*-Debian-Server.tar.gz
+          if-no-files-found: error
+
   publish:
-    needs: [windows-portable, macos-app]
+    needs: [windows-portable, macos-app, debian-server]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -65,4 +93,7 @@ jobs:
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" release-assets/* --repo "$GITHUB_REPOSITORY" --title "CHDSS $GITHUB_REF_NAME" --generate-notes
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" --title "CHDSS $GITHUB_REF_NAME" --generate-notes

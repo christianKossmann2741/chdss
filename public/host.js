@@ -1,6 +1,8 @@
-import { audioConstraints, connectionPolicy, preferOpusStereo, tuneSender } from './webrtc.js';
+import { connectionPolicy, preferOpusStereo, tuneSender } from './webrtc.js';
+import { captureOptions, presets, relayOrigin, validateCapture } from './broadcast.js';
+import { RelayPublisher } from './remote.js';
 
-const token = decodeURIComponent(location.hash.slice(1));
+let token;
 const peers = new Map();
 const waitingViewers = new Set();
 let socket;
@@ -8,7 +10,36 @@ let stream;
 let meterContext;
 let meterFrame;
 const $ = id => document.getElementById(id);
-const qualityHeights = { '720': 720, '1080': 1080, '1440': 1440 };
+let starting = false;
+let timer;
+let remoteBusy = false;
+let closing = false;
+let relaySessionOpen = false;
+const remote = new RelayPublisher((state, count) => {
+  $('remoteStatus').textContent = state === 'connected' ? `Server connected · ${count} remote viewer${count === 1 ? '' : 's'}` : state === 'reconnecting' ? 'Reconnecting to server…' : 'Server disconnected';
+  updateViewerCount();
+});
+const settings = () => ({ height: Number($('quality').value), fps: Number($('frameRate').value), bitrate: Number($('bitrate').value) });
+
+function lockCapture(locked) {
+  for (const id of ['source', 'refreshSources', 'preset', 'quality', 'frameRate', 'bitrate', 'includeAudio']) $(id).disabled = locked;
+  $('shareButton').disabled = locked || !$('source').value;
+}
+
+async function refreshSources() {
+  if (stream || starting) return;
+  $('refreshSources').disabled = true;
+  try {
+    const selected = $('source').value;
+    const sources = await window.chdss.sources();
+    $('source').replaceChildren(...sources.map(source => new Option(source.name, source.id)));
+    if (sources.some(source => source.id === selected)) $('source').value = selected;
+    $('sourceSummary').textContent = sources.length ? $('source').selectedOptions[0].textContent : 'No screens available';
+    if (!sources.length) setError('No screens or windows are available. Check recording permissions, then refresh sources.');
+    else setError();
+  } catch (error) { setError(`Could not list screens or windows: ${error.message}. Grant screen-recording access, then fully quit and reopen CHDSS.`); }
+  finally { lockCapture(false); }
+}
 
 function setError(message = '') {
   $('errorNotice').textContent = message;
@@ -24,13 +55,14 @@ function send(message) {
 }
 
 function updateViewerCount() {
-  $('viewerCount').textContent = String(peers.size + waitingViewers.size);
+  $('viewerCount').textContent = String(peers.size + waitingViewers.size + remote.viewers);
 }
 
 async function createPeer(viewerId) {
   if (!stream || peers.has(viewerId)) return;
   waitingViewers.delete(viewerId);
   const peer = new RTCPeerConnection(connectionPolicy());
+  peer.pendingCandidates = [];
   peers.set(viewerId, peer);
   updateViewerCount();
   peer.onicecandidate = event => event.candidate && send({ type: 'signal', viewerId, payload: { candidate: event.candidate } });
@@ -56,16 +88,23 @@ function removePeer(viewerId) {
 async function handleSignal(message) {
   const peer = peers.get(message.viewerId);
   if (!peer) return;
-  if (message.payload.description) await peer.setRemoteDescription(message.payload.description);
-  if (message.payload.candidate) await peer.addIceCandidate(message.payload.candidate);
+  if (message.payload.description) {
+    await peer.setRemoteDescription(message.payload.description);
+    for (const candidate of peer.pendingCandidates) await peer.addIceCandidate(candidate);
+    peer.pendingCandidates = [];
+  }
+  if (message.payload.candidate) {
+    if (peer.remoteDescription) await peer.addIceCandidate(message.payload.candidate);
+    else peer.pendingCandidates.push(message.payload.candidate);
+  }
 }
 
 function connect() {
   socket = new WebSocket(socketUrl());
   socket.onopen = () => send({ type: 'hello', role: 'host', token });
   socket.onmessage = async event => {
-    const message = JSON.parse(event.data);
     try {
+      const message = JSON.parse(event.data);
       if (message.type === 'viewer-joined') {
         if (stream) await createPeer(message.viewerId);
         else { waitingViewers.add(message.viewerId); updateViewerCount(); }
@@ -74,9 +113,12 @@ function connect() {
       if (message.type === 'signal') await handleSignal(message);
     } catch (error) { setError(`Connection error: ${error.message}`); }
   };
-  socket.onclose = () => {
+  socket.onclose = event => {
     for (const id of [...peers.keys()]) removePeer(id);
-    setTimeout(connect, 1000);
+    waitingViewers.clear();
+    updateViewerCount();
+    if (!closing && event.code !== 1008) setTimeout(connect, 1000);
+    else if (!closing) setError('Local broadcaster authentication failed. Quit and reopen CHDSS.');
   };
 }
 
@@ -96,12 +138,14 @@ function startMeter(audioTrack) {
   draw();
 }
 
-function stopShare() {
+async function stopShare() {
+  send({ type: 'stream-stopped' });
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
-  for (const id of [...peers.keys()]) removePeer(id);
+  for (const id of [...peers.keys()]) { removePeer(id); waitingViewers.add(id); }
+  updateViewerCount();
   cancelAnimationFrame(meterFrame);
-  meterContext?.close();
+  meterContext?.close().catch(() => {});
   meterContext = null;
   $('preview').srcObject = null;
   $('previewEmpty').classList.remove('hidden');
@@ -111,61 +155,161 @@ function stopShare() {
   $('liveBadge').className = 'badge waiting';
   $('audioStatus').textContent = 'Not captured';
   $('audioMeter').firstElementChild.style.width = '0';
+  clearInterval(timer);
+  $('elapsed').textContent = '00:00';
+  $('streamStats').textContent = 'Ready to broadcast';
+  $('muteAudio').disabled = true;
+  lockCapture(false);
+  await window.chdss.setSharing(false);
+  try { await remote.unpublish(); } catch { setError('The Internet upload stopped unexpectedly. End the Internet session before reconnecting.'); }
 }
 
 async function startShare() {
+  if (starting || stream || !$('source').value) return;
+  starting = true;
+  lockCapture(true);
   setError();
-  const frameRate = Number($('frameRate').value);
-  const height = qualityHeights[$('quality').value];
-  const video = { frameRate: { ideal: frameRate, max: frameRate } };
-  if (height) video.height = { ideal: height };
+  let captured;
   try {
     await window.chdss.selectSource($('source').value);
-    const captured = await navigator.mediaDevices.getDisplayMedia({ video, audio: audioConstraints() });
-    const audioTrack = captured.getAudioTracks()[0];
-    const videoTrack = captured.getVideoTracks()[0];
-    if (!videoTrack) throw new Error('No video track was selected.');
-    if (!audioTrack) {
-      captured.getTracks().forEach(track => track.stop());
-      throw new Error('No audio track was captured. Choose a source with “Share audio” enabled. On macOS, grant System Audio Recording permission if prompted.');
-    }
+    captured = await navigator.mediaDevices.getDisplayMedia(captureOptions(settings(), $('includeAudio').checked));
+    const { audioTrack, videoTrack } = validateCapture(captured, $('includeAudio').checked);
     stream = captured;
-    audioTrack.contentHint = 'music';
-    videoTrack.contentHint = 'motion';
+    if (audioTrack) audioTrack.contentHint = 'music';
+    videoTrack.contentHint = presets[$('preset').value]?.hint ?? 'motion';
     videoTrack.onended = stopShare;
-    audioTrack.onended = () => setError('The shared audio track ended. Stop and restart sharing to restore sound.');
+    if (audioTrack) audioTrack.onended = () => setError('The shared audio track ended. Stop and restart sharing to restore sound.');
     $('preview').srcObject = stream;
     $('previewEmpty').classList.add('hidden');
     $('shareButton').classList.add('hidden');
     $('stopButton').classList.remove('hidden');
     $('liveBadge').textContent = 'Live';
     $('liveBadge').className = 'badge live';
-    $('audioStatus').textContent = `${audioTrack.label || 'System audio'} · ${audioTrack.readyState}`;
-    startMeter(audioTrack);
-    for (const id of [...waitingViewers]) await createPeer(id);
+    $('audioStatus').textContent = audioTrack ? 'System audio · waiting for sound' : 'Video only · audio off';
+    $('muteAudio').disabled = !audioTrack;
+    $('muteAudio').textContent = 'Mute';
+    $('muteAudio').setAttribute('aria-pressed', 'false');
+    if (audioTrack) { try { startMeter(audioTrack); } catch { /* Meter failure must not stop capture. */ } }
+    await window.chdss.setSharing(true);
+    if (!stream) return;
+    const startedAt = performance.now();
+    timer = setInterval(() => {
+      const seconds = Math.floor((performance.now() - startedAt) / 1000);
+      $('elapsed').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+      const actual = videoTrack.getSettings();
+      $('streamStats').textContent = `${actual.width ?? '—'} × ${actual.height ?? '—'} · ${Math.round(actual.frameRate ?? 0)} fps`;
+    }, 1000);
+    for (const id of [...waitingViewers]) {
+      try { await createPeer(id); } catch (error) { removePeer(id); setError(`A LAN viewer could not connect: ${error.message}`); }
+    }
+    if (stream && remote.connected) {
+      try { await remote.publish(stream, settings()); } catch (error) { setError(`LAN is live; Internet publishing failed: ${error.message}`); }
+    }
   } catch (error) {
+    captured?.getTracks().forEach(track => track.stop());
+    starting = false;
+    await stopShare();
     if (error.name !== 'NotAllowedError') setError(error.message);
     else setError('Screen sharing was cancelled or denied. Allow screen and system-audio access, then try again.');
+  } finally { starting = false; if (!stream) lockCapture(false); }
+}
+
+function applyPreset() {
+  const preset = presets[$('preset').value] ?? presets.balanced;
+  $('quality').value = String(preset.height);
+  $('frameRate').value = String(preset.fps);
+  $('bitrate').value = String(preset.bitrate);
+  try { localStorage.setItem('chdss-preset', $('preset').value); } catch { /* Preferences are optional. */ }
+}
+
+async function endInternet() {
+  if (remoteBusy) return;
+  remoteBusy = true;
+  $('remoteDisconnect').disabled = true;
+  try {
+    await remote.disconnect();
+    await window.chdss.endRelay();
+    relaySessionOpen = false;
+    $('remoteInvite').classList.add('hidden');
+    $('streamPassword').value = '';
+    $('remoteViewerUrl').value = '';
+    $('remoteDisconnect').classList.add('hidden');
+    $('remoteStatus').textContent = 'Internet session ended. The password is no longer valid.';
+  } catch (error) { setError(`Upload stopped, but the server has not confirmed revocation. Retry End Internet session. ${error.message}`); }
+  finally {
+    remoteBusy = false;
+    $('remoteDisconnect').disabled = false;
+    $('remoteConnect').disabled = relaySessionOpen;
   }
 }
 
-const details = await window.chdss.details();
-$('viewerUrl').value = details.viewerUrls[0];
-$('permissionNotice').classList.toggle('hidden', details.screenPermission !== 'denied');
-connect();
-try {
-  for (const source of await window.chdss.sources()) {
-    const option = document.createElement('option');
-    option.value = source.id;
-    option.textContent = source.name;
-    $('source').append(option);
-  }
-} catch (error) {
-  setError(`Could not list screens or windows: ${error.message}. Grant screen-recording access, then restart CHDSS.`);
+async function connectInternet() {
+  if (remoteBusy || relaySessionOpen) return;
+  let origin;
+  try { origin = relayOrigin($('serverUrl').value); } catch (error) { setError(error.message); return; }
+  remoteBusy = true;
+  $('remoteConnect').disabled = true;
+  $('remoteStatus').textContent = 'Creating private session…';
+  try {
+    relaySessionOpen = true;
+    $('remoteDisconnect').classList.remove('hidden');
+    const session = await window.chdss.createRelay(origin, $('publisherKey').value);
+    $('publisherKey').value = '';
+    await remote.connect(session);
+    $('remoteViewerUrl').value = session.viewerUrl;
+    $('streamPassword').value = session.password;
+    $('streamPassword').type = 'password';
+    $('remoteInvite').classList.remove('hidden');
+    if (stream) await remote.publish(stream, settings());
+  } catch (error) {
+    await remote.disconnect().catch(() => {});
+    setError(`Internet connection failed. LAN is unaffected. ${error.message}`);
+    $('remoteStatus').textContent = 'Connection failed. End this session before retrying.';
+  } finally { remoteBusy = false; $('remoteConnect').disabled = relaySessionOpen; }
 }
-$('shareButton').disabled = !$('source').value;
-$('copyUrl').onclick = async () => { await window.chdss.copy($('viewerUrl').value); $('copyUrl').textContent = 'Copied'; setTimeout(() => { $('copyUrl').textContent = 'Copy'; }, 1200); };
-$('permissions').onclick = () => window.chdss.openPermissions();
-$('shareButton').onclick = startShare;
-$('stopButton').onclick = stopShare;
-window.addEventListener('beforeunload', stopShare);
+
+async function initialize() {
+  if (!window.chdss) throw new Error('The desktop bridge did not load. Open CHDSS.app / the portable executable, not host.html in a browser.');
+  const details = await window.chdss.details();
+  token = details.hostToken;
+  document.body.classList.add(`platform-${details.platform}`);
+  $('viewerUrl').value = details.viewerUrls[0];
+  $('permissionNotice').classList.toggle('hidden', details.screenPermission === 'granted');
+  try { const saved = localStorage.getItem('chdss-preset'); if (presets[saved]) $('preset').value = saved; } catch { /* Optional preference. */ }
+  applyPreset();
+  $('preset').onchange = applyPreset;
+  $('source').onchange = () => { $('sourceSummary').textContent = $('source').selectedOptions[0]?.textContent ?? 'Select a source'; $('shareButton').disabled = !$('source').value; };
+  $('refreshSources').onclick = refreshSources;
+  $('permissions').onclick = () => window.chdss.openPermissions();
+  $('shareButton').onclick = startShare;
+  $('stopButton').onclick = stopShare;
+  $('copyUrl').onclick = async () => { await window.chdss.copy($('viewerUrl').value); $('copyUrl').textContent = 'Copied'; setTimeout(() => { $('copyUrl').textContent = 'Copy'; }, 1200); };
+  $('muteAudio').onclick = () => {
+    const track = stream?.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    remote.setAudioEnabled(track.enabled);
+    $('muteAudio').textContent = track.enabled ? 'Mute' : 'Unmute';
+    $('muteAudio').setAttribute('aria-pressed', String(!track.enabled));
+    $('audioStatus').textContent = track.enabled ? 'System audio · live' : 'System audio · muted';
+  };
+  for (const [id, internet] of [['modeLan', false], ['modeInternet', true]]) $(id).onclick = () => {
+    $('modeLan').setAttribute('aria-pressed', String(!internet));
+    $('modeInternet').setAttribute('aria-pressed', String(internet));
+    $('lanPanel').classList.toggle('hidden', internet);
+    $('internetPanel').classList.toggle('hidden', !internet);
+  };
+  $('remoteConnect').onclick = connectInternet;
+  $('remoteDisconnect').onclick = endInternet;
+  $('revealPassword').onclick = () => { const visible = $('streamPassword').type === 'password'; $('streamPassword').type = visible ? 'text' : 'password'; $('revealPassword').textContent = visible ? 'Hide' : 'Show'; $('revealPassword').setAttribute('aria-pressed', String(visible)); };
+  $('copyInvite').onclick = async () => { await window.chdss.copy(`Watch my CHDSS stream: ${$('remoteViewerUrl').value}\nPassword: ${$('streamPassword').value}`); $('copyInvite').textContent = 'Invitation copied'; setTimeout(() => { $('copyInvite').textContent = 'Copy invitation'; }, 1200); };
+  window.chdss.onCommand(command => {
+    if (command === 'refresh-sources') void refreshSources();
+    if (command === 'toggle-sharing') void (stream ? stopShare() : startShare());
+  });
+  connect();
+  await refreshSources();
+}
+
+window.addEventListener('beforeunload', () => { closing = true; socket?.close(); stream?.getTracks().forEach(track => track.stop()); void remote.disconnect(); });
+initialize().catch(error => setError(error.message));

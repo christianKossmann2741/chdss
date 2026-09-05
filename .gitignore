@@ -4,3 +4,6 @@ node_modules/
 coverage/
 dist/
 out/
+public/vendor/
+**/secrets.json
+**/livekit.yml

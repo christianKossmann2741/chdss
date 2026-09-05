@@ -21,8 +21,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
+      - run: npm audit --omit=dev
+      - run: npm audit --omit=dev --prefix server
 
   portable-windows:
     if: github.event_name == 'push'
@@ -44,3 +47,21 @@ jobs:
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 30
+
+  relay-media:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci --prefix server
+      - run: npm run build:web
+      - run: npx playwright install --with-deps chromium
+      - run: npm run smoke
+        timeout-minutes: 6
+      - run: bash -n server/chdss-server.sh
+      - run: npm run dist:server
+      - run: docker build -f server/Dockerfile -t chdss-relay:ci .

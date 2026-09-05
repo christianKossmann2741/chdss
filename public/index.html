@@ -4,27 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <meta name="description" content="Christian's Handy Dandy Screen Share — private, low-latency LAN streaming.">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Christian's Handy Dandy Screen Share — a private screen, shared with you.">
   <title>CHDSS — Viewer</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body class="viewer-page">
   <main class="viewer-shell">
-    <header>
-      <div><p class="eyebrow">CHDSS · LOCAL WEBRTC</p><h1>Christian's Handy Dandy <span>Screen Share</span></h1></div>
-      <div id="connectionBadge" class="badge waiting">Waiting for host</div>
-    </header>
-    <section class="stage">
-      <video id="stream" autoplay playsinline controls></video>
-      <div id="emptyState" class="empty-state"><div class="pulse"></div><h2>Connecting to screen share</h2><p>The feed will appear when the host starts broadcasting.</p></div>
-      <div class="controls">
-        <button id="playButton" type="button">Play with audio</button>
-        <button id="pipButton" type="button" disabled>Picture in Picture</button>
-        <button id="fullscreenButton" type="button" disabled>Fullscreen</button>
+    <header class="viewer-topbar"><div class="brand"><svg class="signal-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 20V12m7 13V7m8 18V7m7 13V12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span>CHDSS</span><span class="topbar-divider"></span><h1>Screen share</h1></div><div class="topbar-status"><button id="logoutButton" class="quiet-button hidden" type="button">Leave session</button><div id="connectionBadge" class="badge waiting" role="status">Connecting</div></div></header>
+    <section id="stage" class="stage" aria-label="Shared screen">
+      <video id="stream" autoplay playsinline aria-label="Live screen share"></video>
+      <div id="emptyState" class="empty-state"><svg class="screen-illustration" viewBox="0 0 240 170" fill="none" aria-hidden="true"><rect x="30" y="22" width="180" height="112" rx="9" stroke="currentColor" stroke-width="1.5"/><path d="M30 115h180M97 153h46m-33-19-3 19m23-19 3 19" stroke="currentColor" stroke-width="1.5"/><path class="illustration-signal" d="M95 79V66m16 25V54m18 37V54m16 25V66" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg><h2 id="emptyTitle">A screen is on its way.</h2><p id="emptyMessage">Connecting to your private screen share.</p><button id="retryButton" class="hidden" type="button">Try again</button></div>
+      <div id="unlockPanel" class="unlock-overlay hidden">
+        <form id="joinForm" class="unlock-form">
+          <div class="lock-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+          <p class="eyebrow">PRIVATE SCREEN SHARE</p><h2>You’re invited.</h2><p>Enter the session password from your host.<br>No account. Just a shared screen.</p>
+          <label class="field-label" for="joinPassword">Session password</label><input id="joinPassword" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Enter session password" aria-describedby="joinError"><p id="joinError" class="form-error" role="alert"></p><button id="joinButton" class="primary full-width" type="submit">Join private session</button><span class="privacy-caption">Your password is never saved on this device.</span>
+        </form>
       </div>
+      <div class="controls" aria-label="Playback controls"><div class="control-group"><button id="playButton" type="button" disabled title="Play or pause (Space)">Play with audio</button><button id="muteButton" class="quiet-button" type="button" aria-pressed="false" title="Mute (M)" disabled>Mute</button><label class="volume-control"><span class="sr-only">Volume</span><input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" disabled></label></div><div class="control-group"><button id="pipButton" type="button" disabled title="Picture in Picture">Picture in Picture</button><button id="fullscreenButton" type="button" disabled title="Fullscreen (F)">Fullscreen</button></div></div>
     </section>
-    <footer><span>Peer-to-peer on your local network.</span><span id="stats">No media received</span></footer>
+    <footer class="viewer-footer"><span id="transportLabel">Establishing a private connection</span><span id="stats" class="mono">No media received</span></footer>
+    <p class="keyboard-hint"><kbd>Space</kbd> play / pause <span>·</span> <kbd>M</kbd> mute <span>·</span> <kbd>F</kbd> fullscreen</p>
   </main>
-  <script type="module" src="/viewer.js"></script>
+  <script type="module" src="./viewer.js"></script>
 </body>
 </html>

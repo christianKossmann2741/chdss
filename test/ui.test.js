@@ -19,8 +19,8 @@ test('host requests explicit audio constraints and refuses silent capture', asyn
   const [script, main, preload, markup] = await Promise.all([
     read('public/host.js'), read('src/main.js'), read('src/preload.cjs'), read('public/host.html')
   ]);
-  assert.match(script, /audio:\s*audioConstraints\(\)/);
-  assert.match(script, /if \(!audioTrack\)/);
+  assert.match(script, /captureOptions\(settings\(\), \$\('includeAudio'\)\.checked\)/);
+  assert.match(script, /validateCapture\(captured, \$\('includeAudio'\)\.checked\)/);
   assert.match(script, /selectSource/);
   assert.match(main, /useSystemPicker:\s*false/);
   assert.match(main, /chdss:sources/);
@@ -36,6 +36,6 @@ test('preload file URL is converted to a native path for Windows', async () => {
 
 test('host connects even when source enumeration is denied', async () => {
   const script = await read('public/host.js');
-  assert.match(script, /connect\(\);\s*try\s*{\s*for \(const source of await window\.chdss\.sources\(\)\)/s);
+  assert.match(script, /connect\(\);\s*await refreshSources\(\)/s);
   assert.match(script, /catch \(error\)\s*{\s*setError\(/s);
 });

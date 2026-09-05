@@ -13,12 +13,15 @@ $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $stage = Join-Path $env:TEMP ("chdss-install-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage | Out-Null
 try {
-  @('package.json','package-lock.json','src','public','bin','LICENSE','README.md','uninstall.ps1') | ForEach-Object {
+  @('package.json','package-lock.json','src','public','bin','scripts','LICENSE','README.md','uninstall.ps1') | ForEach-Object {
     $item = Join-Path $source $_
     if (Test-Path $item) { Copy-Item $item $stage -Recurse -Force }
   }
   Push-Location $stage
-  try { & npm.cmd ci --omit=dev --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' } }
+  try {
+    & npm.cmd ci --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
+    & npm.cmd run build:web; if ($LASTEXITCODE -ne 0) { throw 'Browser SDK build failed.' }
+  }
   finally { Pop-Location }
   if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }
   New-Item -ItemType Directory -Path (Split-Path -Parent $InstallDir) -Force | Out-Null

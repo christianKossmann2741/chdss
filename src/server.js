@@ -2,7 +2,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, extname, join, normalize } from 'node:path';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -21,14 +21,27 @@ function staticPath(pathname) {
   return join(publicDir, clean);
 }
 
-export async function createShareServer({ port = 41730, token, host = '0.0.0.0' }) {
+export async function createShareServer({ port = 41730, token, hostToken = randomBytes(32).toString('base64url'), host = '0.0.0.0' }) {
   if (!token) throw new Error('A pairing token is required');
   let broadcaster = null;
   const viewers = new Map();
   const peers = new Map();
 
   const server = http.createServer(async (request, response) => {
-    const url = new URL(request.url, 'http://localhost');
+    let url;
+    let pathname;
+    try {
+      url = new URL(request.url, 'http://localhost');
+      pathname = decodeURIComponent(url.pathname);
+    } catch {
+      response.writeHead(400).end('Invalid URL');
+      return;
+    }
+    if (pathname === '/api/info') {
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      response.end(JSON.stringify({ mode: 'lan' }));
+      return;
+    }
     if (url.pathname === '/health') {
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       response.end(JSON.stringify({ ok: true, broadcaster: broadcaster?.readyState === WebSocket.OPEN, viewers: viewers.size }));
@@ -39,7 +52,7 @@ export async function createShareServer({ port = 41730, token, host = '0.0.0.0' 
       response.end();
       return;
     }
-    const path = staticPath(decodeURIComponent(url.pathname));
+    const path = staticPath(pathname);
     if (!path) {
       response.writeHead(403);
       response.end('Forbidden');
@@ -52,7 +65,7 @@ export async function createShareServer({ port = 41730, token, host = '0.0.0.0' 
         'cache-control': extname(path) === '.html' ? 'no-store' : 'public, max-age=300',
         'x-content-type-options': 'nosniff',
         'referrer-policy': 'no-referrer',
-        'content-security-policy': "default-src 'self'; connect-src 'self' ws:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:"
+        'content-security-policy': "default-src 'self'; connect-src 'self' ws: wss: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
       });
       response.end(request.method === 'HEAD' ? undefined : body);
     } catch (error) {
@@ -62,24 +75,41 @@ export async function createShareServer({ port = 41730, token, host = '0.0.0.0' 
   });
 
   const wss = new WebSocketServer({ server, path: '/signal', maxPayload: 64 * 1024 });
-  wss.on('connection', socket => {
+  wss.on('connection', (socket, request) => {
+    socket.on('error', () => socket.terminate());
+    const origin = request.headers.origin;
+    let sameOrigin = !origin;
+    try { if (origin) sameOrigin = new URL(origin).host === request.headers.host; } catch { /* Invalid origins fail closed. */ }
+    if (!sameOrigin || wss.clients.size > 64) { socket.close(1008, 'Connection refused'); return; }
     socket.isAlive = true;
     socket.on('pong', () => { socket.isAlive = true; });
     let role = null;
     let viewerId = null;
+    const deadline = setTimeout(() => { if (!role) socket.close(1008, 'Authentication required'); }, 5000);
+    deadline.unref();
+    let windowStart = Date.now();
+    let messageCount = 0;
 
     socket.on('message', raw => {
+      if (Date.now() - windowStart > 1000) { windowStart = Date.now(); messageCount = 0; }
+      if (++messageCount > 100) { socket.close(1008, 'Rate limited'); return; }
       let message;
       try { message = JSON.parse(raw.toString()); } catch {
         send(socket, { type: 'error', code: 'bad-message', message: 'Invalid JSON' });
         return;
       }
+      if (!message || typeof message !== 'object' || Array.isArray(message)) {
+        send(socket, { type: 'error', code: 'bad-message', message: 'Invalid message' });
+        return;
+      }
       if (!role) {
-        if (message.type !== 'hello' || !['host', 'viewer'].includes(message.role) || !sameToken(message.token, token)) {
+        const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress);
+        if (message.type !== 'hello' || !['host', 'viewer'].includes(message.role) || (message.role === 'host' && !local) || !sameToken(message.token, message.role === 'host' ? hostToken : token)) {
           send(socket, { type: 'error', code: 'unauthorized', message: 'Invalid pairing code' });
           socket.close(1008, 'Unauthorized');
           return;
         }
+        clearTimeout(deadline);
         role = message.role;
         if (role === 'host') {
           if (broadcaster && broadcaster !== socket) broadcaster.close(1012, 'Host replaced');
@@ -95,6 +125,10 @@ export async function createShareServer({ port = 41730, token, host = '0.0.0.0' 
         }
         return;
       }
+      if (role === 'host' && message.type === 'stream-stopped') {
+        for (const viewer of viewers.values()) send(viewer, { type: 'host-left' });
+        return;
+      }
       if (message.type !== 'signal' || typeof message.payload !== 'object' || message.payload === null) {
         send(socket, { type: 'error', code: 'bad-message', message: 'Unsupported message' });
         return;
@@ -108,6 +142,7 @@ export async function createShareServer({ port = 41730, token, host = '0.0.0.0' 
     });
 
     socket.on('close', () => {
+      clearTimeout(deadline);
       if (socket === broadcaster) {
         broadcaster = null;
         for (const viewer of viewers.values()) send(viewer, { type: 'host-left' });

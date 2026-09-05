@@ -12,12 +12,13 @@ bin_dir="${CHDSS_BIN_DIR:-$HOME/.local/bin}"
 stage="$(mktemp -d "${TMPDIR:-/tmp}/chdss-install.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 
-for item in package.json package-lock.json src public bin LICENSE README.md uninstall.sh; do
+for item in package.json package-lock.json src public bin scripts LICENSE README.md uninstall.sh; do
   [[ -e "$source_dir/$item" ]] && cp -R "$source_dir/$item" "$stage/"
 done
 (
   cd "$stage"
-  npm ci --omit=dev --no-audit --no-fund
+  npm ci --no-audit --no-fund
+  npm run build:web
 )
 mkdir -p "$(dirname "$app_dir")" "$bin_dir"
 rm -rf "$app_dir"

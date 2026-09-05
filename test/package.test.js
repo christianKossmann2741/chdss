@@ -40,3 +40,11 @@ test('macOS packaging produces a self-contained Apple Silicon application', asyn
   assert.match(manifest.build.mac.extendInfo.NSAudioCaptureUsageDescription, /system audio/i);
   assert.match(manifest.build.mac.extendInfo.NSScreenCaptureUsageDescription, /screen/i);
 });
+
+test('releases include a tested Debian server bundle and checksums', async () => {
+  const release = await read('.github/workflows/release.yml');
+  assert.match(release, /npm ci --prefix server/);
+  assert.match(release, /npm run smoke/);
+  assert.match(release, /npm run dist:server/);
+  assert.match(release, /sha256sum \* > SHA256SUMS/);
+});
