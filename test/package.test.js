@@ -7,6 +7,14 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => readFile(join(root, name), 'utf8');
 
+test('Windows native builds use runners with the required Visual Studio 2022 toolchain', async () => {
+  for (const name of ['.github/workflows/ci.yml', '.github/workflows/release.yml']) {
+    const workflow = await read(name);
+    assert.match(workflow, /windows-2022/);
+    assert.doesNotMatch(workflow, /windows-latest/);
+  }
+});
+
 test('desktop artifacts bundle a native filtered-audio helper outside ASAR', async () => {
   const manifest = JSON.parse(await read('package.json'));
   for (const [platform, executable] of [['mac', 'chdss-audio'], ['win', 'chdss-audio.exe']]) {
