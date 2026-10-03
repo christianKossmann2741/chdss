@@ -15,7 +15,10 @@ try {
   & ctest --test-dir $BuildDirectory -C $Configuration --output-on-failure --output-junit (Join-Path $BuildDirectory "policy-tests.xml")
   if ($LASTEXITCODE -ne 0) { throw "CTest failed ($LASTEXITCODE)" }
   $artifact = Get-Item (Join-Path $bin "chdss-audio.exe")
-  @{ type = "build-result"; success = $true; architecture = "x64"; runtime = "static"; path = $artifact.FullName; bytes = $artifact.Length; sha256 = (Get-FileHash $artifact.FullName -Algorithm SHA256).Hash; policyTests = "passed"; nativeAudioIsolation = "not-run" } | ConvertTo-Json -Compress
+  $hasher = [System.Security.Cryptography.SHA256]::Create()
+  try { $hash = [BitConverter]::ToString($hasher.ComputeHash([System.IO.File]::ReadAllBytes($artifact.FullName))).Replace("-", "").ToLowerInvariant() }
+  finally { $hasher.Dispose() }
+  @{ type = "build-result"; success = $true; architecture = "x64"; runtime = "static"; path = $artifact.FullName; bytes = $artifact.Length; sha256 = $hash; policyTests = "passed"; nativeAudioIsolation = "not-run" } | ConvertTo-Json -Compress
   exit 0
 } catch {
   @{ type = "build-result"; success = $false; message = $_.Exception.Message } | ConvertTo-Json -Compress

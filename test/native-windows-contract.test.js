@@ -36,3 +36,10 @@ test('self-contained target build has static runtime and exact output path', () 
   assert.match(build, /MSVC_RUNTIME_LIBRARY/);
   assert.match(build, /-static/);
 });
+
+test('native build hashing does not depend on inherited PowerShell module paths', () => {
+  const build = read('build.ps1');
+  assert.doesNotMatch(build, /Get-FileHash/);
+  assert.match(build, /System\.Security\.Cryptography\.SHA256/);
+  assert.match(build, /ComputeHash/);
+});
