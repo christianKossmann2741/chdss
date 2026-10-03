@@ -1,5 +1,5 @@
 import { _electron as electron, chromium } from 'playwright';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
 
@@ -15,7 +15,7 @@ try {
     return { version: details.version, platform: details.platform, permission: details.screenPermission, sources: document.getElementById('source').options.length, error: document.getElementById('errorNotice').textContent };
   });
   console.log('Packaged desktop:', JSON.stringify(state));
-  assert.equal(state.version, '2.0.0');
+  assert.equal(state.version, JSON.parse(await readFile('package.json', 'utf8')).version);
   const health = await fetch('http://127.0.0.1:41735/health').then(r => r.json());
   assert.equal(health.broadcaster, true);
   await page.screenshot({ path: `${output}/mac-packaged.png`, fullPage: true });

@@ -26,7 +26,7 @@
         </div>
         <div class="preview-caption"><span id="sourceSummary">No source selected</span><span id="streamStats" class="mono">Not broadcasting</span></div>
         <section class="audio-strip" aria-label="Broadcast audio">
-          <div class="audio-heading"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><div><span class="field-title">System audio</span><span id="audioStatus" class="subtle">Not captured</span></div></div>
+          <div class="audio-heading"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm13-1a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg><div><span class="field-title">Filtered audio</span><span id="audioStatus" class="subtle">Not captured</span></div></div>
           <div id="audioMeter" class="audio-meter" aria-label="Captured audio level"><i></i></div>
           <button id="muteAudio" class="quiet-button" type="button" aria-pressed="false" disabled>Mute</button>
         </section>
@@ -36,7 +36,8 @@
         <section class="inspector-section capture-section">
           <div class="section-heading"><h2>Source</h2><button id="refreshSources" class="icon-button" type="button" aria-label="Refresh screens and windows" title="Refresh sources"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M16 7a6.5 6.5 0 1 0 .4 5M16 3v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
           <label class="field-label" for="source">Screen or window</label><select id="source" aria-label="Screen or window"></select>
-          <label class="check-row"><input id="includeAudio" type="checkbox" checked><span>Include system audio<small>Turn off for a video-only broadcast</small></span></label>
+          <label class="check-row"><input id="includeAudio" type="checkbox" checked><span>Include filtered audio<small>Window: selected application. Screen: Discord desktop excluded.</small></span></label>
+          <p class="hint">Audio isolation is per application, not per browser tab or window. Use the Discord desktop app, not Discord in a shared browser. No microphone is captured.</p>
           <div class="section-heading quality-heading"><h2>Stream quality</h2><span class="subtle">WebRTC</span></div>
           <label class="field-label" for="preset">Preset</label><select id="preset"><option value="balanced">Balanced · everyday sharing</option><option value="motion">Motion · smooth video</option><option value="detail">Detail · crisp text</option><option value="economy">Economy · less bandwidth</option></select>
           <div class="settings-grid">

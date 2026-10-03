@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import electron from 'electron';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
@@ -10,7 +11,7 @@ if (process.argv.includes('--help') || process.argv.includes('-h')) {
   process.exit(0);
 }
 if (process.argv.includes('--version') || process.argv.includes('-v')) {
-  console.log('1.0.0');
+  console.log(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version);
   process.exit(0);
 }
 const child = spawn(electron, [root, ...process.argv.slice(2)], { detached: true, stdio: 'ignore', env: process.env });

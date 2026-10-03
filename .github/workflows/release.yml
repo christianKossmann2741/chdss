@@ -21,6 +21,8 @@ jobs:
       - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
+      - run: node scripts/build-native.js
+      - run: native/bin/win32-x64/policy-tests.exe
       - run: npm run dist:win
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -42,6 +44,7 @@ jobs:
       - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
+      - run: bash native/macos/test.sh
       - run: npm run dist:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -72,6 +75,7 @@ jobs:
       - run: npm audit --omit=dev && npm audit --omit=dev --prefix server
       - run: npm run build:web
       - run: npx playwright install --with-deps chromium
+      - run: node scripts/smoke-filtered.js
       - run: npm run smoke
         timeout-minutes: 6
       - run: bash -n server/chdss-server.sh
@@ -96,4 +100,4 @@ jobs:
         run: |
           cd release-assets
           sha256sum * > SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" --title "CHDSS $GITHUB_REF_NAME" --generate-notes
+          gh release create "$GITHUB_REF_NAME" ./* --repo "$GITHUB_REPOSITORY" --title "CHDSS $GITHUB_REF_NAME" --generate-notes --prerelease --latest=false

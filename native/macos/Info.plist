@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>com.christiankossmann.chdss.audio</string>
+  <key>CFBundleName</key><string>CHDSS Audio</string>
+  <key>CFBundleVersion</key><string>2.1.0</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>LSUIElement</key><true/>
+  <key>NSAudioCaptureUsageDescription</key><string>CHDSS captures audio from the selected application or from desktop applications excluding Discord for your invited viewers.</string>
+  <key>NSScreenCaptureUsageDescription</key><string>CHDSS uses ScreenCaptureKit application filters to capture only allowed application audio.</string>
+</dict></plist>

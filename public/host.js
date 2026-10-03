@@ -1,16 +1,21 @@
 import { connectionPolicy, preferOpusStereo, tuneSender } from './webrtc.js';
 import { captureOptions, presets, relayOrigin, validateCapture } from './broadcast.js';
 import { RelayPublisher } from './remote.js';
+import { FilteredAudio } from './filtered-audio.js';
 
 let token;
 const peers = new Map();
 const waitingViewers = new Set();
 let socket;
 let stream;
+let filteredAudio;
+let shareGeneration = 0;
+let audioLabel = 'Filtered audio';
 let meterContext;
 let meterFrame;
 const $ = id => document.getElementById(id);
 let starting = false;
+let stopping = false;
 let timer;
 let remoteBusy = false;
 let closing = false;
@@ -139,6 +144,12 @@ function startMeter(audioTrack) {
 }
 
 async function stopShare() {
+  if (stopping) return;
+  stopping = true;
+  try {
+  shareGeneration++;
+  const audio = filteredAudio;
+  filteredAudio = null;
   send({ type: 'stream-stopped' });
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
@@ -159,33 +170,46 @@ async function stopShare() {
   $('elapsed').textContent = '00:00';
   $('streamStats').textContent = 'Ready to broadcast';
   $('muteAudio').disabled = true;
-  lockCapture(false);
+  lockCapture(true);
+  await audio?.stop();
+  if (!audio) await window.chdss.stopAudio();
   await window.chdss.setSharing(false);
   try { await remote.unpublish(); } catch { setError('The Internet upload stopped unexpectedly. End the Internet session before reconnecting.'); }
+  } finally { stopping = false; lockCapture(starting); }
 }
 
 async function startShare() {
-  if (starting || stream || !$('source').value) return;
+  if (starting || stopping || stream || !$('source').value) return;
   starting = true;
+  const generation = ++shareGeneration;
   lockCapture(true);
   setError();
   let captured;
   try {
     await window.chdss.selectSource($('source').value);
-    captured = await navigator.mediaDevices.getDisplayMedia(captureOptions(settings(), $('includeAudio').checked));
+    captured = await navigator.mediaDevices.getDisplayMedia(captureOptions(settings(), false));
+    captured.getVideoTracks()[0].onended = stopShare;
+    if ($('includeAudio').checked) {
+      const audio = new FilteredAudio(window.chdss, { onFailure: message => { void stopShare(); setError(`Sharing stopped: ${message}`); } });
+      filteredAudio = audio;
+      const result = await audio.start($('source').value);
+      captured.addTrack(result.track);
+      audioLabel = result.scope === 'application' ? 'Selected application audio' : 'Screen audio · Discord excluded';
+    }
+    if (generation !== shareGeneration || captured.getVideoTracks()[0].readyState === 'ended') { captured.getTracks().forEach(track => track.stop()); return; }
     const { audioTrack, videoTrack } = validateCapture(captured, $('includeAudio').checked);
     stream = captured;
     if (audioTrack) audioTrack.contentHint = 'music';
     videoTrack.contentHint = presets[$('preset').value]?.hint ?? 'motion';
     videoTrack.onended = stopShare;
-    if (audioTrack) audioTrack.onended = () => setError('The shared audio track ended. Stop and restart sharing to restore sound.');
+    if (audioTrack) audioTrack.onended = () => { void stopShare(); setError('Sharing stopped because filtered audio ended. Restart sharing.'); };
     $('preview').srcObject = stream;
     $('previewEmpty').classList.add('hidden');
     $('shareButton').classList.add('hidden');
     $('stopButton').classList.remove('hidden');
     $('liveBadge').textContent = 'Live';
     $('liveBadge').className = 'badge live';
-    $('audioStatus').textContent = audioTrack ? 'System audio · waiting for sound' : 'Video only · audio off';
+    $('audioStatus').textContent = audioTrack ? `${audioLabel} · live` : 'Video only · audio off';
     $('muteAudio').disabled = !audioTrack;
     $('muteAudio').textContent = 'Mute';
     $('muteAudio').setAttribute('aria-pressed', 'false');
@@ -208,6 +232,7 @@ async function startShare() {
   } catch (error) {
     captured?.getTracks().forEach(track => track.stop());
     starting = false;
+    if (generation !== shareGeneration) return;
     await stopShare();
     if (error.name !== 'NotAllowedError') setError(error.message);
     else setError('Screen sharing was cancelled or denied. Allow screen and system-audio access, then try again.');
@@ -291,7 +316,7 @@ async function initialize() {
     remote.setAudioEnabled(track.enabled);
     $('muteAudio').textContent = track.enabled ? 'Mute' : 'Unmute';
     $('muteAudio').setAttribute('aria-pressed', String(!track.enabled));
-    $('audioStatus').textContent = track.enabled ? 'System audio · live' : 'System audio · muted';
+    $('audioStatus').textContent = `${audioLabel} · ${track.enabled ? 'live' : 'muted'}`;
   };
   for (const [id, internet] of [['modeLan', false], ['modeInternet', true]]) $(id).onclick = () => {
     $('modeLan').setAttribute('aria-pressed', String(!internet));

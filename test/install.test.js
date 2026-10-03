@@ -33,3 +33,11 @@ test('both uninstallers exist and only remove CHDSS-owned paths', async () => {
   assert.match(await text('uninstall.sh'), /CHDSS_HOME/);
   assert.match(await text('uninstall.ps1'), /CHDSS/);
 });
+
+test('source installers include and compile native audio before replacing an installed app', async () => {
+  for (const name of ['install.sh', 'install.ps1']) {
+    const source = await text(name);
+    assert.match(source, /native/);
+    assert.match(source, /build-native\.js/);
+  }
+});

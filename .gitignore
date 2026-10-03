@@ -7,3 +7,5 @@ out/
 public/vendor/
 **/secrets.json
 **/livekit.yml
+native/bin/
+native/windows/build/

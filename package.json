@@ -1,6 +1,6 @@
 {
   "name": "chdss",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Christian's Handy Dandy Screen Share — low-latency LAN screen and audio sharing",
   "type": "module",
   "main": "src/main.js",
@@ -8,16 +8,16 @@
     "chdss": "bin/chdss.js"
   },
   "scripts": {
-    "prestart": "npm run build:web",
+    "prestart": "npm run build:web && node scripts/build-native.js",
     "start": "electron .",
     "build:web": "node scripts/build-web.js",
     "smoke": "node scripts/smoke.js",
     "test": "node --test",
     "check": "node scripts/check.js",
     "test:install": "node --test test/install.test.js",
-    "predist:win": "npm run build:web",
+    "predist:win": "npm run build:web && node scripts/build-native.js --platform win32 --arch x64",
     "dist:win": "electron-builder --win portable --x64",
-    "predist:mac": "npm run build:web",
+    "predist:mac": "npm run build:web && node scripts/build-native.js --platform darwin --arch arm64",
     "dist:mac": "electron-builder --mac dir --arm64",
     "dist:server": "npm run build:web && node scripts/package-server.js"
   },
@@ -49,10 +49,12 @@
     },
     "win": {
       "icon": "assets/icon.ico",
+      "extraResources": [{ "from": "native/bin/win32-x64", "to": "native", "filter": ["chdss-audio.exe"] }],
       "target": "portable"
     },
     "mac": {
       "icon": "assets/icon.icns",
+      "extraResources": [{ "from": "native/bin/darwin-arm64", "to": "native", "filter": ["chdss-audio"] }],
       "target": "dir",
       "category": "public.app-category.utilities",
       "extendInfo": {

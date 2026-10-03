@@ -7,6 +7,15 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = name => readFile(join(root, name), 'utf8');
 
+test('desktop artifacts bundle a native filtered-audio helper outside ASAR', async () => {
+  const manifest = JSON.parse(await read('package.json'));
+  for (const [platform, executable] of [['mac', 'chdss-audio'], ['win', 'chdss-audio.exe']]) {
+    const resources = manifest.build[platform].extraResources;
+    assert.ok(resources?.some(entry => entry.to === 'native' && entry.filter.includes(executable)), `${platform} helper must be packaged`);
+    assert.match(manifest.scripts[`predist:${platform}`], /build-native/);
+  }
+});
+
 test('Windows packaging produces a self-contained portable executable', async () => {
   const [manifestText, workflow, releaseWorkflow] = await Promise.all([
     read('package.json'),

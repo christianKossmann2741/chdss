@@ -64,9 +64,27 @@ try {
   await host.exposeFunction('testCreateRelay', () => sessionRequest('POST'));
   await host.exposeFunction('testEndRelay', () => sessionRequest('DELETE'));
   await host.addInitScript(({ token, hostToken, url }) => {
+    let audioCallback, audioTimer, captureNumber = 0;
     window.chdss = {
       details: async () => ({ hostToken, viewerUrls: [url + '/#' + token], platform: 'darwin', screenPermission: 'granted' }),
       sources: async () => [{ id: 'synthetic-screen', name: 'Synthetic test screen' }], selectSource: async () => {},
+      onAudio: callback => { audioCallback = callback; return () => { audioCallback = null; }; },
+      onAudioFailure: () => () => {},
+      startAudio: async () => {
+        const captureId = `synthetic-${++captureNumber}`;
+        let phase = 0;
+        clearInterval(audioTimer);
+        audioTimer = setInterval(() => {
+          const samples = new Float32Array(1920);
+          for (let frame = 0; frame < 960; frame++) {
+            const value = 0.15 * Math.sin(phase++ * 2 * Math.PI * 440 / 48000);
+            samples[frame * 2] = value; samples[frame * 2 + 1] = value;
+          }
+          audioCallback?.({ captureId, samples: new Uint8Array(samples.buffer) });
+        }, 20);
+        return { captureId, sampleRate: 48000, channels: 2, scope: 'display' };
+      },
+      stopAudio: async () => { clearInterval(audioTimer); },
       setSharing: async () => {}, copy: async () => {}, openPermissions: async () => {}, onCommand: () => {},
       createRelay: () => window.testCreateRelay(), endRelay: () => window.testEndRelay()
     };
@@ -76,10 +94,10 @@ try {
       const draw = () => { ctx.fillStyle = '#131923'; ctx.fillRect(0, 0, 640, 360); ctx.fillStyle = '#a5a0ff'; ctx.fillRect(frame++ % 600, 130, 40, 100); ctx.font = '28px sans-serif'; ctx.fillText('CHDSS · synthetic transport test', 65, 75); };
       draw(); const timer = setInterval(draw, 33);
       const stream = canvas.captureStream(30);
-      const audio = new AudioContext(); const oscillator = audio.createOscillator(); const gain = audio.createGain(); const destination = audio.createMediaStreamDestination(); gain.gain.value = 0.15;
-      oscillator.connect(gain).connect(destination); oscillator.start(); await audio.resume();
-      if (options.audio) stream.addTrack(destination.stream.getAudioTracks()[0]);
-      stream.getVideoTracks()[0].addEventListener('ended', () => { clearInterval(timer); audio.close(); });
+      if (options.audio) throw new Error('Transport smoke must never request unfiltered display audio.');
+      const track = stream.getVideoTracks()[0];
+      const stop = track.stop.bind(track);
+      track.stop = () => { clearInterval(timer); stop(); };
       return stream;
     };
   }, { token, hostToken, url: lan.localUrl });

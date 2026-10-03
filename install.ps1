@@ -13,7 +13,7 @@ $source = Split-Path -Parent $MyInvocation.MyCommand.Path
 $stage = Join-Path $env:TEMP ("chdss-install-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $stage | Out-Null
 try {
-  @('package.json','package-lock.json','src','public','bin','scripts','LICENSE','README.md','uninstall.ps1') | ForEach-Object {
+  @('package.json','package-lock.json','src','public','bin','scripts','native','test','LICENSE','README.md','uninstall.ps1') | ForEach-Object {
     $item = Join-Path $source $_
     if (Test-Path $item) { Copy-Item $item $stage -Recurse -Force }
   }
@@ -21,6 +21,7 @@ try {
   try {
     & npm.cmd ci --no-audit --no-fund; if ($LASTEXITCODE -ne 0) { throw 'npm install failed.' }
     & npm.cmd run build:web; if ($LASTEXITCODE -ne 0) { throw 'Browser SDK build failed.' }
+    & node scripts/build-native.js; if ($LASTEXITCODE -ne 0) { throw 'Native audio build failed. Source installs require Visual Studio C++ Build Tools; use the portable download to avoid compiler prerequisites.' }
   }
   finally { Pop-Location }
   if (Test-Path $InstallDir) { Remove-Item $InstallDir -Recurse -Force }

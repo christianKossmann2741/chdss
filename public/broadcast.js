@@ -19,7 +19,7 @@ export function validateCapture(stream, includeAudio) {
   const audioTrack = stream.getAudioTracks()[0];
   if (!videoTrack || (includeAudio && !audioTrack)) {
     stream.getTracks().forEach(track => track.stop());
-    throw new Error(!videoTrack ? 'No screen was captured.' : 'macOS or Windows did not supply system audio. Check Screen & System Audio Recording access, fully quit and reopen CHDSS, or explicitly turn off System audio to share video only.');
+    throw new Error(!videoTrack ? 'No screen was captured.' : 'Filtered system audio was not supplied. Check recording access and the native audio helper, then restart CHDSS. Uncheck Include filtered audio only if you intentionally want video only.');
   }
   return { videoTrack, audioTrack };
 }

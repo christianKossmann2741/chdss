@@ -6,18 +6,29 @@ import { fileURLToPath } from 'node:url';
 import { createShareServer } from './server.js';
 import { normalizePort, publicViewerUrl } from './config.js';
 import { RelaySession } from './relay-client.js';
+import { NativeAudioCapture, audioHelperPath } from './native-audio.js';
 
 let share;
 let mainWindow;
 let selectedSourceId;
+let captureSourceId;
 let sharing = false;
 let sleepBlocker;
 let quitting = false;
 let closing = false;
 const remoteSession = new RelaySession();
-if (process.platform === 'darwin' && process.env.CHDSS_MAC_AUDIO === 'screencapturekit') {
-  app.commandLine.appendSwitch('disable-features', 'MacCatapLoopbackAudioForScreenShare');
-}
+const nativeAudio = new NativeAudioCapture({ helperPath: audioHelperPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath }) });
+let audioInFlight = 0;
+let audioCaptureId;
+const sendAudio = (channel, packet) => {
+  if (mainWindow && !mainWindow.webContents.isDestroyed() && trustedFrame(mainWindow.webContents.mainFrame)) mainWindow.webContents.send(channel, packet);
+};
+nativeAudio.on('data', packet => {
+  if (packet.captureId !== audioCaptureId || audioInFlight >= 8) return;
+  audioInFlight++;
+  sendAudio('chdss:audio-data', packet);
+});
+nativeAudio.on('failure', packet => sendAudio('chdss:audio-failure', packet));
 
 function trustedFrame(frame) {
   try { const url = new URL(frame?.url); return url.origin === share.localUrl && url.pathname === '/host.html'; }
@@ -51,6 +62,7 @@ async function requestQuit() {
     }
     quitting = true;
     setSharing(false);
+    await nativeAudio.stop();
     await share?.close();
     app.quit();
   } finally { closing = false; }
@@ -68,7 +80,9 @@ async function configureCapture() {
     try {
       const sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 0, height: 0 } });
       const source = sources.find(item => item.id === sourceId);
-      callback(source ? { video: source, ...(request.audioRequested ? { audio: 'loopback' } : {}) } : {});
+      // Video only. Native helpers enforce the audio scope separately.
+      if (source && !request.audioRequested) captureSourceId = source.id;
+      callback(source && !request.audioRequested ? { video: source } : {});
     } catch { callback({}); }
   }, { useSystemPicker: false });
   session.defaultSession.setPermissionRequestHandler((contents, permission, callback) => {
@@ -98,6 +112,17 @@ async function createWindow() {
   const openPermissions = () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' : 'ms-settings:privacy-broadfilesystemaccess');
   handle('chdss:permissions', openPermissions);
   handle('chdss:sharing', setSharing);
+  handle('chdss:audio-start', async sourceId => {
+    if (sourceId !== captureSourceId) throw new Error('Audio source does not match the captured video.');
+    const ready = await nativeAudio.start(sourceId);
+    audioCaptureId = ready.captureId;
+    audioInFlight = 0;
+    return ready;
+  });
+  handle('chdss:audio-stop', async () => { captureSourceId = undefined; audioCaptureId = undefined; audioInFlight = 0; await nativeAudio.stop(); });
+  ipcMain.on('chdss:audio-ack', (event, captureId) => {
+    if (event.sender === mainWindow?.webContents && event.senderFrame === mainWindow.webContents.mainFrame && trustedFrame(event.senderFrame) && captureId === audioCaptureId) audioInFlight = Math.max(0, audioInFlight - 1);
+  });
   handle('chdss:relay-create', (url, key) => remoteSession.create(url, key));
   handle('chdss:relay-end', () => remoteSession.end());
   handle('chdss:sources', async () => {
@@ -109,6 +134,7 @@ async function createWindow() {
     const source = sources.find(item => item.id === sourceId);
     if (!source) throw new Error('The selected screen or window is no longer available.');
     selectedSourceId = source.id;
+    captureSourceId = undefined;
   });
 
   mainWindow = new BrowserWindow({
@@ -127,7 +153,8 @@ async function createWindow() {
   mainWindow.webContents.on('will-navigate', event => event.preventDefault());
   mainWindow.webContents.on('will-frame-navigate', event => event.preventDefault());
   mainWindow.webContents.on('will-redirect', event => event.preventDefault());
-  mainWindow.webContents.on('render-process-gone', () => { setSharing(false); remoteSession.end().catch(() => {}); });
+  mainWindow.webContents.on('render-process-gone', () => { setSharing(false); void nativeAudio.stop(); remoteSession.end().catch(() => {}); });
+  mainWindow.webContents.on('did-start-navigation', () => { captureSourceId = undefined; void nativeAudio.stop(); });
   mainWindow.on('close', event => { if (!quitting) { event.preventDefault(); void requestQuit(); } });
   mainWindow.once('ready-to-show', () => mainWindow.show());
   const command = name => mainWindow.webContents.send('chdss:command', name);
@@ -140,7 +167,7 @@ async function createWindow() {
       { type: 'separator' }, { role: 'quit' }
     ] },
     { role: 'editMenu' }, { role: 'windowMenu' },
-    { label: 'Help', submenu: [{ label: 'About CHDSS', click: () => dialog.showMessageBox(mainWindow, { message: `CHDSS ${app.getVersion()}`, detail: 'Christian’s Handy Dandy Screen Share\nLAN by default. Your server when you need it.\nInternet mode uses your trusted server to forward media. System audio includes all playing applications.' }) }] }
+    { label: 'Help', submenu: [{ label: 'About CHDSS', click: () => dialog.showMessageBox(mainWindow, { message: `CHDSS ${app.getVersion()}`, detail: 'Christian’s Handy Dandy Screen Share\nLAN by default. Your server when you need it.\nWindow audio is scoped to its application. Screen audio excludes the Discord desktop app. Browser-hosted Discord is not separately identifiable.' }) }] }
   ]));
   await mainWindow.loadURL(`${share.localUrl}/host.html`);
 }

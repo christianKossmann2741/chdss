@@ -1,10 +1,12 @@
 # Christian's Handy Dandy Screen Share
 
-**CHDSS 2** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
+**CHDSS 2.1** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
 
 ## What it does
 
 - Captures a selected screen or window through Electron/Chromium
+- Window shares capture the owning application's audio, not the entire system mix
+- Screen shares exclude the Discord desktop application and its helper processes using native OS audio capture
 - Refuses accidental silent capture when system audio is requested; offers an explicit video-only mode
 - Streams peer-to-peer on LAN, or uploads one WebRTC feed to your own LiveKit forwarding server for Internet viewers
 - Uses Opus stereo at 48 kHz with in-band forward-error correction and WebRTC A/V timestamps
@@ -18,14 +20,14 @@
 ## Requirements
 
 - macOS 14.2 or newer, or Windows 11
-- Node.js 20 or newer for source installation; the packaged Windows and macOS builds are self-contained
+- Node.js 20 or newer and native compiler tools for source installation (Xcode Command Line Tools on Mac; Visual Studio C++ Build Tools + Windows SDK on Windows). The packaged Windows and macOS builds are self-contained and need none of these
 - LAN: host and viewers on the same LAN/VLAN with client-to-client traffic allowed
 - Internet: your own Linux VPS, DNS hostname, Docker + Compose, and open media ports (see [server guide](server/README.md))
 - A current Chromium, Edge, Firefox, or Safari browser; PiP depends on that browser's support
 
 ## Install
 
-Download the portable applications from the [latest release](https://github.com/christianKossmann2741/chdss/releases/latest). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release.
+Download the portable applications from the [2.1.0 release](https://github.com/christianKossmann2741/chdss/releases/tag/v2.1.0). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. **2.1.0 is a pre-release pending real-machine audio-isolation acceptance tests.** The latest stable release remains available separately.
 
 ### macOS
 
@@ -40,7 +42,7 @@ chdss
 
 The default locations are `~/.local/share/chdss` and `~/.local/bin/chdss`. Override them with `CHDSS_HOME` and `CHDSS_BIN_DIR`. If `~/.local/bin` is not on PATH, the installer prints the exact line to add.
 
-Allow **CHDSS** in System Settings → Privacy & Security → **Screen & System Audio Recording**, then fully quit and reopen it. Electron 44 uses Core Audio taps for system audio on modern macOS, with separate authorization; a granted screen permission does not prove system-audio access. The packaged app includes the required audio usage description. Source launches can use Electron/the terminal's permission identity instead of CHDSS.
+Allow **CHDSS** in System Settings → Privacy & Security → **Screen & System Audio Recording**, then fully quit and reopen it. A bundled native helper uses ScreenCaptureKit application filters for audio, separately from Electron's video capture. The app and helper include permission usage descriptions. Source launches can use Electron/the terminal's permission identity instead of CHDSS. If macOS denies either capture path, CHDSS fails visibly rather than reverting to unfiltered audio.
 
 ### Windows 11 (PowerShell)
 
@@ -62,7 +64,7 @@ The installer uses `%LOCALAPPDATA%\CHDSS`, creates `%LOCALAPPDATA%\CHDSS-command
 2. Start with **Balanced (1080p / 30 FPS / 5 Mbps)**. Use **Economy (720p / 30 FPS / 2.5 Mbps)** for less stable connections, **Motion** for 60 FPS, or **Detail** for text. Bitrate is a cap, not a measured speed.
 3. Select the screen or window in CHDSS.
 4. Click **Start sharing**.
-5. Play a sound and confirm the audio meter moves. If audio is requested but the OS supplies no audio track, CHDSS refuses to silently downgrade. Uncheck **Include system audio** when you intentionally want video only. A live track with no sound is not proof of working loopback.
+5. Play a sound in the shared application and confirm the audio meter moves. If native filtering cannot start, CHDSS refuses to silently downgrade or capture the full system mix. Uncheck **Include filtered audio** only when you intentionally want video only. A live track alone is not proof that audible samples are reaching viewers.
 6. Send the viewer link only to people on the same local network. Anyone holding the current link can watch until CHDSS exits.
 7. On the viewer, click **Play with audio** if browser autoplay policy muted or paused the feed. Use **Picture in Picture** when enabled.
 
@@ -88,13 +90,20 @@ In CHDSS, choose **Share access → Internet**, enter your HTTPS server origin a
 
 ## Audio reliability
 
-CHDSS requests stereo 48 kHz system audio, disables microphone-oriented echo cancellation/noise suppression/automatic gain, configures Opus stereo with forward-error correction, gives audio high network priority, and keeps audio and video inside the same WebRTC connection for synchronization. The host UI shows both the captured track and a live level meter.
+CHDSS captures stereo 48 kHz audio through native application filters, feeds it into a bounded AudioWorklet queue, and publishes the resulting media track alongside video. It does not capture a microphone or apply microphone-oriented echo cancellation/noise suppression/automatic gain. Opus stereo uses forward-error correction and high network priority. The UI shows the chosen audio scope and a live level meter. Native audio and Electron video are separately captured, so the shared WebRTC connection does not by itself guarantee perfect A/V alignment.
 
 No application can guarantee perfect audio over arbitrary Wi-Fi, drivers, browser versions, or hardware. CHDSS instead fails visibly when no audio track exists and exposes enough diagnostics to catch the common failure before sharing the link. For lowest delay and cleanest audio, use Ethernet or 5/6 GHz Wi-Fi and avoid saturating the LAN.
 
-The current Electron loopback backend captures the complete system-output mix, including voice-chat applications such as Discord. Per-application exclusion requires native process-audio capture on each operating system and is not currently available; use headphones and avoid monitoring your own shared stream when a voice call is active.
+### Audio scope and limitations
 
-For Mac troubleshooting, a documented ScreenCaptureKit compatibility backend can be selected before starting the packaged executable: `CHDSS_MAC_AUDIO=screencapturekit /path/to/CHDSS.app/Contents/MacOS/CHDSS`. This is an alternative capture backend, not a permission bypass. Do not assume it fixes every OS/driver issue. Quit the existing instance before changing it.
+- **Window:** macOS captures the owning application; Windows captures its process tree. Operating systems do not expose a general audio stream for each individual window. Other windows or tabs sharing that application's audio process can also be audible. This is application isolation, not a claim of per-tab isolation.
+- **Screen:** native Discord desktop variants and their helper processes are excluded. Windows mixes separately allowed application process-loopback streams, rather than trying to subtract Discord from a pre-mixed endpoint stream. macOS uses application-filtered ScreenCaptureKit capture.
+- **Discord in a browser:** the OS sees browser audio, not an identifiable Discord audio process. Use the Discord desktop app during sharing. Browser-hosted voice calls inside a captured browser cannot be selectively removed.
+- **Capture failure:** sharing stops or refuses to start. There is no automatic fallback to full-system loopback. Explicit video-only mode remains available.
+- The helper must track application/process changes during sharing. A window/application disappearing or a filter update failing is a capture failure, not permission to broaden audio capture.
+- Selecting Discord itself as a window intentionally selects that application's audio. Avoid it if your purpose is excluding the call.
+
+Native implementation and acceptance tests: [macOS](native/macos/README.md), [Windows](native/windows/README.md). Packaged startup, policy tests, and synthetic PCM transport tests are distinct from physical audio-isolation verification.
 
 ## Network and security model
 
@@ -135,13 +144,14 @@ npm ci
 npm ci --prefix server
 npm test
 npm run check
+node scripts/build-native.js
 npm start
 npm run dist:win
 npm run dist:mac
 npm run dist:server
 ```
 
-The test suite covers pairing-role isolation, malformed inputs, relay password revocation, least-privilege tokens, rate limits, startup/cleanup, UI controls, and packaging. `npx playwright install chromium && npm run smoke` exercises the real browser host/viewer and a Docker LiveKit SFU using deterministic canvas/audio tracks. Synthetic transport verification does **not** establish native OS loopback capture or public-VPS firewall reachability. `node scripts/verify-mac.js` launches the built Mac bundle and tests native screen capture when permissions permit.
+The test suite covers pairing-role isolation, malformed inputs, relay password revocation, least-privilege tokens, rate limits, native-helper lifecycle, bounded PCM buffering, UI controls, and packaging. `node scripts/smoke-filtered.js` verifies synthetic PCM through the real AudioWorklet and decoded LAN audio, including mute, stop/re-share, denial, and fatal-filter cleanup. `npx playwright install chromium && npm run smoke` adds a real Docker LiveKit SFU. Synthetic transport verification does **not** establish native OS audio isolation or public-VPS firewall reachability. `node scripts/verify-mac.js` launches the built Mac bundle and tests native screen capture when permissions permit. CI compiles the native helpers and runs native policy/PCM tests before release packaging.
 
 ## License
 

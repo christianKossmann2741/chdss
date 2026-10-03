@@ -1,0 +1,5 @@
+build-vs/
+build-host/
+build-cross/
+test-reports/
+__pycache__/

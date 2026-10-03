@@ -24,6 +24,13 @@ jobs:
       - run: npm ci --prefix server
       - run: npm test
       - run: npm run check
+      - run: node scripts/build-native.js
+      - name: Verify Windows native policy
+        if: runner.os == 'Windows'
+        run: native/bin/win32-x64/policy-tests.exe
+      - name: Verify Mac native policy and PCM conversion
+        if: runner.os == 'macOS'
+        run: bash native/macos/test.sh
       - run: npm audit --omit=dev
       - run: npm audit --omit=dev --prefix server
 
@@ -60,6 +67,7 @@ jobs:
       - run: npm ci --prefix server
       - run: npm run build:web
       - run: npx playwright install --with-deps chromium
+      - run: node scripts/smoke-filtered.js
       - run: npm run smoke
         timeout-minutes: 6
       - run: bash -n server/chdss-server.sh

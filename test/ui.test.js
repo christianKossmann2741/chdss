@@ -15,16 +15,17 @@ test('viewer reveals video on track and supports browser Picture-in-Picture', as
   assert.match(css, /video:not\(\.receiving\)/);
 });
 
-test('host requests explicit audio constraints and refuses silent capture', async () => {
+test('host captures video separately and refuses missing filtered audio', async () => {
   const [script, main, preload, markup] = await Promise.all([
     read('public/host.js'), read('src/main.js'), read('src/preload.cjs'), read('public/host.html')
   ]);
-  assert.match(script, /captureOptions\(settings\(\), \$\('includeAudio'\)\.checked\)/);
+  assert.match(script, /captureOptions\(settings\(\), false\)/);
+  assert.match(script, /new FilteredAudio/);
   assert.match(script, /validateCapture\(captured, \$\('includeAudio'\)\.checked\)/);
   assert.match(script, /selectSource/);
   assert.match(main, /useSystemPicker:\s*false/);
   assert.match(main, /chdss:sources/);
-  assert.match(main, /audio:\s*'loopback'/);
+  assert.doesNotMatch(main, /audio:\s*'loopback'/);
   assert.match(preload, /selectSource/);
   assert.match(markup, /id="source"/);
 });
