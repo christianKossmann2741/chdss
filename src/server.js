@@ -21,7 +21,7 @@ function staticPath(pathname) {
   return join(publicDir, clean);
 }
 
-export async function createShareServer({ port = 41730, token, hostToken = randomBytes(32).toString('base64url'), host = '0.0.0.0' }) {
+export async function createShareServer({ port = 41730, token, hostToken = randomBytes(32).toString('base64url'), host }) {
   if (!token) throw new Error('A pairing token is required');
   let broadcaster = null;
   const viewers = new Map();

@@ -1,6 +1,8 @@
 # Windows filtered audio
 
-The bundled x64 `chdss-audio.exe` uses WASAPI **process-loopback include-tree activation**. It never captures an endpoint-wide mix and never falls back to one. Minimum Windows build: 20348; the portable Electron application targets Windows 11.
+The bundled x64 `chdss-audio.exe` uses WASAPI **process-loopback include-tree activation**. It never captures an endpoint-wide mix and never falls back to one. Windows 11 and **updated Windows 10 version 2004 / build 19041 or later** are admitted to try capture. Successful native activation and format initialization, not the version check alone, determine availability.
+
+Microsoft's API documentation lists build 20348. [OBS's maintained Windows audio registration](https://github.com/obsproject/obs-studio/blob/master/plugins/win-wasapi/plugin-main.cpp) explicitly notes earlier support and admits build 19041. CHDSS follows that admission threshold and preserves the activation failure path. Windows 10 22H2 / build 19045 is not prematurely rejected anymore. Unpatched/older systems or unsupported drivers still receive a clear error; video-only sharing remains available. There is no injected hook, virtual driver, or fallback to a mixed output-device capture. Windows 10 native capture has not been physically validated by this change; run the acceptance harness on the actual target.
 
 ## Build
 

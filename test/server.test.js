@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import WebSocket from 'ws';
+import { createServer as createTcpServer } from 'node:net';
 import { createShareServer } from '../src/server.js';
 
 const openSocket = (url) => new Promise((resolve, reject) => {
@@ -24,6 +25,21 @@ test('server serves viewer without leaking the token and reports health', async 
   assert.doesNotMatch(html, /top-secret-token/);
   const health = await fetch(`${share.localUrl}/health`).then(r => r.json());
   assert.deepEqual(health, { ok: true, broadcaster: false, viewers: 0 });
+});
+
+test('default listener serves both IPv4 and IPv6 invitations when IPv6 is available', async t => {
+  const probe = createTcpServer();
+  try {
+    await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '::1', resolve); });
+    await new Promise(resolve => probe.close(resolve));
+  } catch (error) {
+    if (['EAFNOSUPPORT', 'EADDRNOTAVAIL', 'EPROTONOSUPPORT'].includes(error.code)) { t.skip('IPv6 unavailable on this host'); return; }
+    throw error;
+  }
+  const share = await createShareServer({ port: 0, token: 'viewer-secret' });
+  t.after(() => share.close());
+  assert.equal((await fetch(`${share.localUrl}/health`)).status, 200);
+  assert.equal((await fetch(`http://[::1]:${share.port}/health`)).status, 200);
 });
 
 test('signaling rejects a wrong pairing token', async (t) => {

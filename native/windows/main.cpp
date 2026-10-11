@@ -184,8 +184,8 @@ void require_supported_windows() {
   using VersionFn = LONG(WINAPI*)(OSVERSIONINFOW*);
   auto fn = reinterpret_cast<VersionFn>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetVersion"));
   OSVERSIONINFOW version{}; version.dwOSVersionInfoSize = sizeof(version);
-  if (!fn || fn(&version) != 0 || version.dwMajorVersion < 10 || version.dwBuildNumber < 20348)
-    throw std::runtime_error("Process-loopback requires Windows build 20348 or newer; no whole-system fallback");
+  if (!fn || fn(&version) != 0 || !process_loopback_candidate(version.dwMajorVersion, version.dwBuildNumber))
+    throw std::runtime_error("Filtered audio requires updated Windows 10 version 2004 (build 19041) or newer. Install Windows updates, or turn off audio for video-only sharing. Unfiltered audio will not be used.");
 }
 class Activation final : public IActivateAudioInterfaceCompletionHandler, public IAgileObject {
   std::atomic<ULONG> references_{1};
@@ -237,12 +237,12 @@ public:
     if (!event_.value) throw std::runtime_error("Cannot create audio event");
     Com<Activation> activation; *activation.put() = new Activation(p.pid);
     Com<IActivateAudioInterfaceAsyncOperation> operation;
-    check(ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &activation->property, activation.value, operation.put()), "Activate process-loopback");
+    check(ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK, __uuidof(IAudioClient), &activation->property, activation.value, operation.put()), "Activate filtered audio. On Windows 10, install available updates; unsupported systems cannot safely capture filtered audio");
     HANDLE waits[] = {stop_event, activation->done.value};
     auto wait = WaitForMultipleObjects(2, waits, FALSE, 10000);
     if (wait == WAIT_OBJECT_0) throw std::runtime_error("Capture stopped during activation");
     if (wait != WAIT_OBJECT_0 + 1) throw std::runtime_error("Process-loopback activation timed out");
-    check(activation->result, "Process-loopback activation failed");
+    check(activation->result, "Filtered audio activation failed. On Windows 10, install available updates or use video-only sharing; unfiltered audio will not be used");
     client_.value = activation->client.value; client_->AddRef();
     // Request the actual output format. AUTOCONVERTPCM makes Windows resample/remix.
     // Never label an endpoint's native PCM as float/48 kHz.

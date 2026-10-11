@@ -52,7 +52,12 @@
         <section class="inspector-section share-section" aria-label="Share access">
           <div class="section-heading"><h2>Share access</h2><span class="subtle">Private by default</span></div>
           <div class="segmented" role="group" aria-label="Connection mode"><button id="modeLan" type="button" aria-pressed="true" aria-controls="lanPanel">Local network</button><button id="modeInternet" type="button" aria-pressed="false" aria-controls="internetPanel">Internet</button></div>
-          <div id="lanPanel" class="mode-panel"><label class="field-label" for="viewerUrl">Viewer link</label><div class="url-row"><input id="viewerUrl" readonly spellcheck="false" placeholder="Preparing local link…"><button id="copyUrl" type="button">Copy</button></div><p class="hint">Open on any device on the same network. The pairing code in this link grants access.</p></div>
+          <div id="lanPanel" class="mode-panel">
+            <label class="field-label" for="networkAdapter">Network adapter / IP address</label>
+            <div class="url-row"><select id="networkAdapter" aria-label="Viewer link network adapter"></select><button id="refreshNetworks" type="button" title="Refresh network adapters" aria-label="Refresh network adapters">Refresh</button></div>
+            <label class="field-label viewer-link-label" for="viewerUrl">Viewer link</label><div class="url-row"><input id="viewerUrl" readonly spellcheck="false" placeholder="Preparing local link…"><button id="copyUrl" type="button">Copy</button></div>
+            <p class="hint">Choose Ethernet, Wi-Fi, or a virtual adapter such as ZeroTier. Both devices need access to that network. The pairing code in this link grants access.</p>
+          </div>
           <div id="internetPanel" class="mode-panel hidden">
             <p class="hint">Add a private session through your relay server. <strong>LAN stays available.</strong></p>
             <label class="field-label" for="serverUrl">Relay server</label><input id="serverUrl" type="url" placeholder="https://stream.example.com" autocomplete="url" spellcheck="false">

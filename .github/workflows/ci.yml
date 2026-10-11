@@ -68,6 +68,7 @@ jobs:
       - run: npm run build:web
       - run: npx playwright install --with-deps chromium
       - run: node scripts/smoke-filtered.js
+      - run: node scripts/smoke-network.js
       - run: npm run smoke
         timeout-minutes: 6
       - run: bash -n server/chdss-server.sh

@@ -1,6 +1,6 @@
 # Christian's Handy Dandy Screen Share
 
-**CHDSS 2.1** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
+**CHDSS 2.2** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
 
 ## What it does
 
@@ -19,7 +19,7 @@
 
 ## Requirements
 
-- macOS 14.2 or newer, or Windows 11
+- macOS 14.2 or newer; Windows 11, or updated Windows 10 version 2004 / build 19041 or newer. Filtered audio still requires successful native API activation; see Windows compatibility below
 - Node.js 20 or newer and native compiler tools for source installation (Xcode Command Line Tools on Mac; Visual Studio C++ Build Tools + Windows SDK on Windows). The packaged Windows and macOS builds are self-contained and need none of these
 - LAN: host and viewers on the same LAN/VLAN with client-to-client traffic allowed
 - Internet: your own Linux VPS, DNS hostname, Docker + Compose, and open media ports (see [server guide](server/README.md))
@@ -27,7 +27,7 @@
 
 ## Install
 
-Download the portable applications from the [2.1.0 release](https://github.com/christianKossmann2741/chdss/releases/tag/v2.1.0). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. **2.1.0 is a pre-release pending real-machine audio-isolation acceptance tests.** The latest stable release remains available separately.
+Download the portable applications from the [2.2.0 release](https://github.com/christianKossmann2741/chdss/releases/tag/v2.2.0). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. **2.2.0 is a pre-release pending real-machine audio-isolation acceptance tests, including Windows 10.** The latest stable release remains available separately.
 
 ### macOS
 
@@ -44,7 +44,7 @@ The default locations are `~/.local/share/chdss` and `~/.local/bin/chdss`. Overr
 
 Allow **CHDSS** in System Settings → Privacy & Security → **Screen & System Audio Recording**, then fully quit and reopen it. A bundled native helper uses ScreenCaptureKit application filters for audio, separately from Electron's video capture. The app and helper include permission usage descriptions. Source launches can use Electron/the terminal's permission identity instead of CHDSS. If macOS denies either capture path, CHDSS fails visibly rather than reverting to unfiltered audio.
 
-### Windows 11 (PowerShell)
+### Windows 10 / 11 (PowerShell)
 
 For the portable edition, download `CHDSS-*-Windows-Portable.exe` from the latest GitHub release and run it directly. It includes Electron and Node.js, requires no npm, Git, administrator access, PATH changes, or uninstaller, and can be moved or deleted as a single file. Electron may still create ordinary temporary files and Chromium cache data while running. Windows SmartScreen may warn because the executable is not code-signed; use **More info → Run anyway** only if it came from this repository.
 
@@ -58,6 +58,8 @@ chdss
 
 The installer uses `%LOCALAPPDATA%\CHDSS`, creates `%LOCALAPPDATA%\CHDSS-command\chdss.cmd`, and adds only that command directory to the user PATH. Open a new terminal after installation. If Windows Firewall prompts, allow **Private networks** only.
 
+**Windows 10 audio compatibility:** the previous helper rejected builds below 20348 before trying capture. Microsoft documents that threshold, but [OBS's maintained implementation](https://github.com/obsproject/obs-studio/blob/master/plugins/win-wasapi/plugin-main.cpp) enables the same process-filter API from updated Windows 10 version 2004 (build 19041). CHDSS now allows those builds to try native activation too. This includes Windows 10 22H2 / build 19045, but is not a guarantee for every patch level or audio driver. Install available Windows updates first and check the build with `winver`. Older builds or failed activation stop with an explicit error; unfiltered system audio is never substituted. Windows 10 itself reached normal end of support in October 2025; this compatibility change does not restore OS security support.
+
 ## Use
 
 1. Open the portable app on the computer whose screen will be shared.
@@ -65,10 +67,12 @@ The installer uses `%LOCALAPPDATA%\CHDSS`, creates `%LOCALAPPDATA%\CHDSS-command
 3. Select the screen or window in CHDSS.
 4. Click **Start sharing**.
 5. Play a sound in the shared application and confirm the audio meter moves. If native filtering cannot start, CHDSS refuses to silently downgrade or capture the full system mix. Uncheck **Include filtered audio** only when you intentionally want video only. A live track alone is not proof that audible samples are reaching viewers.
-6. Send the viewer link only to people on the same local network. Anyone holding the current link can watch until CHDSS exits.
+6. Choose **Network adapter / IP address** beside the viewer link, then **Copy**. Ethernet, Wi-Fi and virtual adapters such as ZeroTier are listed by their real IP and adapter name. Send the link only to people on that network. Anyone holding the current link can watch until CHDSS exits.
 7. On the viewer, click **Play with audio** if browser autoplay policy muted or paused the feed. Use **Picture in Picture** when enabled.
 
 The pairing code changes every time the app starts. Closing CHDSS stops the HTTP/signaling server and every media peer.
+
+The selected adapter/address is remembered, but the invitation token is not saved. **Refresh** re-enumerates adapters after connecting/disconnecting ZeroTier or another VPN; a removed address falls back to an available one. IPv4 aliases and browser-usable IPv6 addresses are supported. Scoped IPv6 link-local addresses are omitted because they do not form portable browser links. Choosing an IP changes the invitation URL, not the WebRTC ICE routing policy. Both devices must be joined/authorized on the same ZeroTier network, and host firewalls must allow the selected interface. End-to-end connectivity over your particular VPN still needs testing.
 
 ### Optional Internet sharing
 
@@ -151,7 +155,8 @@ npm run dist:mac
 npm run dist:server
 ```
 
-The test suite covers pairing-role isolation, malformed inputs, relay password revocation, least-privilege tokens, rate limits, native-helper lifecycle, bounded PCM buffering, UI controls, and packaging. `node scripts/smoke-filtered.js` verifies synthetic PCM through the real AudioWorklet and decoded LAN audio, including mute, stop/re-share, denial, and fatal-filter cleanup. `npx playwright install chromium && npm run smoke` adds a real Docker LiveKit SFU. Synthetic transport verification does **not** establish native OS audio isolation or public-VPS firewall reachability. `node scripts/verify-mac.js` launches the built Mac bundle and tests native screen capture when permissions permit. CI compiles the native helpers and runs native policy/PCM tests before release packaging.
+
+The test suite covers pairing-role isolation, malformed inputs, relay password revocation, least-privilege tokens, rate limits, native-helper lifecycle, bounded PCM buffering, network-adapter inventory, UI controls, and packaging. `node scripts/smoke-filtered.js` verifies synthetic PCM through the real AudioWorklet and decoded LAN audio, including mute, stop/re-share, denial, and fatal-filter cleanup. `npx playwright install chromium && npm run smoke` adds a real Docker LiveKit SFU. Synthetic transport verification does **not** establish native OS audio isolation or public-VPS firewall reachability. `node scripts/verify-mac.js` launches the built Mac bundle and tests native screen capture when permissions permit. CI compiles the native helpers and runs native policy/PCM tests before release packaging.
 
 ## License
 

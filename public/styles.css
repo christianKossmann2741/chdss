@@ -92,7 +92,8 @@ svg { flex: none; }
 .segmented button { min-height: 31px; padding: 5px 8px; background: transparent; border: 1px solid transparent; font-size: 11px; color: var(--muted); }
 .segmented button[aria-pressed="true"] { color: var(--text); background: #2b292f; border-color: #3a363f; box-shadow: 0 1px 3px #0004; }
 .url-row { display: flex; gap: 7px; min-width: 0; }
-.url-row input { flex: 1; }
+.url-row input, .url-row select { flex: 1; min-width: 0; }
+.viewer-link-label { margin-top: 14px; }
 .url-row button { font-size: 11px; }
 .mode-panel .hint { margin: 10px 0 0; }
 #internetPanel > .hint:first-child { margin: 0 0 16px; }

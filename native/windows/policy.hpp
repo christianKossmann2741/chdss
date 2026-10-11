@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 namespace chdss {
+// OBS also admits updated Windows 10 2004+. Actual activation must still succeed.
+inline bool process_loopback_candidate(std::uint32_t major, std::uint32_t build) {
+  return major > 10 || (major == 10 && build >= 19041);
+}
 enum class Scope { application, display };
 struct Source { Scope scope; std::uintptr_t window; };
 inline std::uint64_t decimal(const std::string& s) {

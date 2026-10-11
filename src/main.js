@@ -4,7 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { networkInterfaces } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { createShareServer } from './server.js';
-import { normalizePort, publicViewerUrl } from './config.js';
+import { normalizePort } from './config.js';
+import { viewerAddresses } from './network-addresses.js';
 import { RelaySession } from './relay-client.js';
 import { NativeAudioCapture, audioHelperPath } from './native-audio.js';
 
@@ -68,10 +69,6 @@ async function requestQuit() {
   } finally { closing = false; }
 }
 
-function lanAddresses() {
-  return Object.values(networkInterfaces()).flat().filter(entry => entry && entry.family === 'IPv4' && !entry.internal).map(entry => entry.address);
-}
-
 async function configureCapture() {
   session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
     const sourceId = selectedSourceId;
@@ -97,17 +94,17 @@ async function createWindow() {
   const port = normalizePort(process.env.CHDSS_PORT);
   share = await createShareServer({ port, token, hostToken });
   await configureCapture();
-  const addresses = lanAddresses();
-  const viewerUrls = addresses.map(address => publicViewerUrl(address, share.port, token));
-  if (!viewerUrls.length) viewerUrls.push(publicViewerUrl('127.0.0.1', share.port, token));
-
-  handle('chdss:details', () => ({
-    hostToken,
-    version: app.getVersion(),
-    viewerUrls,
-    platform: process.platform,
-    screenPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted'
-  }));
+  handle('chdss:details', () => {
+    const networkAddresses = viewerAddresses(networkInterfaces(), share.port, token);
+    return {
+      hostToken,
+      version: app.getVersion(),
+      networkAddresses,
+      viewerUrls: networkAddresses.map(entry => entry.url),
+      platform: process.platform,
+      screenPermission: process.platform === 'darwin' ? systemPreferences.getMediaAccessStatus('screen') : 'granted'
+    };
+  });
   handle('chdss:copy', text => clipboard.writeText(String(text).slice(0, 8192)));
   const openPermissions = () => shell.openExternal(process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' : 'ms-settings:privacy-broadfilesystemaccess');
   handle('chdss:permissions', openPermissions);

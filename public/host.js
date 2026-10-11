@@ -247,6 +247,32 @@ function applyPreset() {
   try { localStorage.setItem('chdss-preset', $('preset').value); } catch { /* Preferences are optional. */ }
 }
 
+function selectNetworkAddress() {
+  $('viewerUrl').value = $('networkAdapter').selectedOptions[0]?.dataset.url ?? '';
+  $('copyUrl').disabled = !$('viewerUrl').value;
+  try { localStorage.setItem('chdss-network', $('networkAdapter').value); } catch { /* No invitation token is persisted. */ }
+}
+
+function refreshViewerLinks(details) {
+  let selected = $('networkAdapter').value;
+  if (!selected) { try { selected = localStorage.getItem('chdss-network'); } catch { /* Optional preference. */ } }
+  const addresses = details.networkAddresses ?? details.viewerUrls.map(url => ({ adapter: 'Network', address: new URL(url).hostname, url }));
+  $('networkAdapter').replaceChildren(...addresses.map(entry => {
+    const option = new Option(`${entry.address} · ${entry.adapter}`, JSON.stringify([entry.adapter, entry.address]));
+    option.dataset.url = entry.url;
+    return option;
+  }));
+  if ([...$('networkAdapter').options].some(option => option.value === selected)) $('networkAdapter').value = selected;
+  selectNetworkAddress();
+}
+
+async function refreshNetworks() {
+  $('refreshNetworks').disabled = true;
+  try { refreshViewerLinks(await window.chdss.details()); }
+  catch { setError('Could not refresh network addresses. The existing invitation has not changed. Try again.'); }
+  finally { $('refreshNetworks').disabled = false; }
+}
+
 async function endInternet() {
   if (remoteBusy) return;
   remoteBusy = true;
@@ -298,7 +324,9 @@ async function initialize() {
   const details = await window.chdss.details();
   token = details.hostToken;
   document.body.classList.add(`platform-${details.platform}`);
-  $('viewerUrl').value = details.viewerUrls[0];
+  refreshViewerLinks(details);
+  $('networkAdapter').onchange = selectNetworkAddress;
+  $('refreshNetworks').onclick = refreshNetworks;
   $('permissionNotice').classList.toggle('hidden', details.screenPermission === 'granted');
   try { const saved = localStorage.getItem('chdss-preset'); if (presets[saved]) $('preset').value = saved; } catch { /* Optional preference. */ }
   applyPreset();

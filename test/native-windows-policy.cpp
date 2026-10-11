@@ -4,6 +4,11 @@
 using namespace chdss;
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 int main() { try {
+  CHECK(process_loopback_candidate(10, 19041)); // updated Windows 10 version 2004
+  CHECK(process_loopback_candidate(10, 19045)); // Windows 10 version 22H2
+  CHECK(process_loopback_candidate(10, 22000)); // Windows 11
+  CHECK(!process_loopback_candidate(10, 18363));
+  CHECK(!process_loopback_candidate(6, 9600));
   auto w = parse_source("window:123:0");
   CHECK(w.scope == Scope::application && w.window == 123);
   CHECK(parse_source("screen:0:0").scope == Scope::display);
