@@ -134,6 +134,9 @@ test('player shortcuts adjust and remember volume, toggle stats and fill without
   await key('Escape'); assert.equal(f.$('statsPanel').classList.contains('hidden'), true);
   await key('?', { shiftKey: true }); assert.equal(f.$('helpPanel').classList.contains('hidden'), false);
   await key('z'); assert.equal(f.$('stage').classList.contains('fill'), true); assert.equal(saved.get('chdss-viewer-fill'), '1');
+  assert.equal(f.$('fxToggle').attributes['aria-pressed'], 'false', 'screen filter starts off');
+  await key('v'); assert.equal(f.$('fxToggle').attributes['aria-pressed'], 'true'); assert.equal(saved.get('chdss-screen-filter'), 'on');
+  await f.$('fxToggle').listeners.click(); assert.equal(saved.get('chdss-screen-filter'), 'off');
   await key('m', { repeat: true }); assert.equal(f.$('stream').muted, false, 'held keys only repeat volume');
   assert.ok([...saved.keys()].every(name => !/token|password|pair/i.test(name)));
   app.dispose();

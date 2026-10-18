@@ -6,6 +6,7 @@
 
 - **A completely redesigned broadcast studio and viewer.** A live HUD replaces the old panels: on-air title and status line, a SOURCE → CAPTURE → AUDIO → ON AIR progress rail, split-flap viewer counter, measured upload bitrate chart against your bitrate cap, a rolling audio waveform, and a ticker tape of real session telemetry. Fonts ship with the app and relay; nothing loads from a third-party CDN.
 - **A rebuilt player.** Video starts automatically; browsers that block sound get muted playback with a clear **Tap to unmute** instead of a blank frame. Controls auto-hide while watching, and so does the cursor. Double-click toggles fullscreen. Adds fit/fill, a stats panel (resolution, frame rate, bitrate, codec, estimated latency, jitter, packet loss, dropped frames), an incoming-audio meter, volume memory, a shortcut sheet, screen wake lock, media-key support and automatic recovery when a LAN connection fails.
+- An optional **screen filter** (halftone, film grain, scanlines and a slow scan sweep) for the full look. It is **off by default**; turn it on or off with **Filter** in the studio header, or the filter button / **V** in the viewer. Each browser remembers its own choice.
 - Respects *reduce motion* system settings.
 
 ## What it does
@@ -96,7 +97,7 @@ In CHDSS, choose **Share access → Internet**, enter your HTTPS server origin a
 ### Keyboard controls
 
 - Desktop: **Cmd/Ctrl+Shift+S** starts/stops sharing; **Cmd/Ctrl+R** refreshes sources.
-- Viewer: **Space**/**K** play/pause, **M** mute, **↑/↓** volume, **F** fullscreen (or double-click), **P** Picture in Picture, **Z** fit/fill, **I** stats, **?** shortcut sheet, **Esc** closes panels. Shortcuts do not fire while typing a password. Volume, fit mode and the stats panel are remembered per browser; invitation codes and passwords never are.
+- Viewer: **Space**/**K** play/pause, **M** mute, **↑/↓** volume, **F** fullscreen (or double-click), **P** Picture in Picture, **Z** fit/fill, **V** screen filter, **I** stats, **?** shortcut sheet, **Esc** closes panels. Shortcuts do not fire while typing a password. Volume, fit mode and the stats panel are remembered per browser; invitation codes and passwords never are.
 
 ## Audio reliability
 

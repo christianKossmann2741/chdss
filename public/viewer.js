@@ -1,5 +1,5 @@
 import { connectionPolicy } from './webrtc.js';
-import { FlapBoard, Sparkline, Ticker, Waveform, barcode, boot, clock, formatBitrate, scramble, timecode, typewriter } from './hud.js';
+import { FlapBoard, Sparkline, Ticker, Waveform, barcode, boot, clock, formatBitrate, scramble, screenFilter, timecode, typewriter } from './hud.js';
 
 /** One viewer owns one transport and one media element. Credentials stay in memory. */
 export function createViewer(env = globalThis, options = {}) {
@@ -23,6 +23,7 @@ export function createViewer(env = globalThis, options = {}) {
   const wave = new Waveform($('audioWave'), { bars: 18 });
   const chart = new Sparkline($('bitrateChart'), { capacity: 60 });
   const ticker = new Ticker($('ticker'));
+  const filter = screenFilter($('fxToggle'), { storage: env.localStorage, root: document.documentElement });
   const setState = (id, on) => $(id).setAttribute('data-state', on ? 'on' : 'off');
 
   function badge(text, state = 'waiting') {
@@ -460,6 +461,8 @@ export function createViewer(env = globalThis, options = {}) {
   on($('statsButton'), 'click', () => togglePanel('statsPanel'));
   on($('helpButton'), 'click', () => togglePanel('helpPanel'));
   on($('fitButton'), 'click', () => setFill(!stage.classList.contains('fill')));
+  const toggleFilter = () => toast(`Screen filter ${filter.toggle() ? 'on' : 'off'}`);
+  on($('fxToggle'), 'click', toggleFilter);
   on(stage, 'pointermove', activity);
   on(stage, 'pointerdown', activity);
   on(stage, 'focusin', activity);
@@ -472,7 +475,7 @@ export function createViewer(env = globalThis, options = {}) {
     if (event.repeat && !['arrowup', 'arrowdown'].includes(key)) return;
     const action = {
       f: toggleFullscreen, m: toggleMute, ' ': togglePlayback, k: togglePlayback, p: togglePip,
-      i: () => togglePanel('statsPanel'), '?': () => togglePanel('helpPanel'), z: () => setFill(!stage.classList.contains('fill')),
+      v: toggleFilter, i: () => togglePanel('statsPanel'), '?': () => togglePanel('helpPanel'), z: () => setFill(!stage.classList.contains('fill')),
       arrowup: () => nudgeVolume(0.05), arrowdown: () => nudgeVolume(-0.05),
       escape: () => togglePanel('statsPanel', false)
     }[key];

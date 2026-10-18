@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { FlapBoard, Sparkline, Ticker, Waveform, formatBitrate, groupDigits, scramble, timecode, typewriter } from '../public/hud.js';
+import { FlapBoard, Sparkline, Ticker, Waveform, formatBitrate, groupDigits, scramble, screenFilter, timecode, typewriter } from '../public/hud.js';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -47,4 +47,22 @@ test('interface fonts are bundled offline and never fetched from a third party',
 test('animations respect reduced motion', async () => {
   const css = await read('public/styles.css');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+});
+
+test('screen filter is off by default, remembered when enabled, and only styled under html.fx', async () => {
+  const saved = new Map();
+  const storage = { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) };
+  const classes = new Set();
+  const root = { classList: { toggle: (name, on) => on ? classes.add(name) : classes.delete(name) } };
+  const attributes = {};
+  const button = { setAttribute: (key, value) => { attributes[key] = value; } };
+  const filter = screenFilter(button, { storage, root });
+  assert.equal(filter.enabled, false); assert.equal(classes.has('fx'), false); assert.equal(attributes['aria-pressed'], 'false');
+  filter.toggle();
+  assert.equal(classes.has('fx'), true); assert.equal(attributes['aria-pressed'], 'true');
+  assert.equal(screenFilter(null, { storage, root: { classList: { toggle() {} } } }).enabled, true, 'choice persists');
+  filter.set(false); assert.equal(classes.has('fx'), false);
+  const css = await read('public/styles.css');
+  for (const rule of css.matchAll(/^([^{}@]*(?:::before|::after)[^{]*)\{[^}]*(?:radial-gradient\(rgba\(236|feTurbulence|repeating-linear-gradient\(180deg, rgba\(0)/gm)) assert.match(rule[1], /\.fx /, rule[1]);
+  assert.match(css, /^\.fx-sweep \{ display: none; \}/m);
 });

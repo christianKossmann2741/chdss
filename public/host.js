@@ -2,7 +2,7 @@ import { connectionPolicy, preferOpusStereo, tuneSender } from './webrtc.js';
 import { captureOptions, presets, relayOrigin, validateCapture } from './broadcast.js';
 import { RelayPublisher } from './remote.js';
 import { FilteredAudio } from './filtered-audio.js';
-import { FlapBoard, Sparkline, Ticker, Waveform, barcode, boot, clock, formatBitrate, groupDigits, scramble, timecode, typewriter } from './hud.js';
+import { FlapBoard, Sparkline, Ticker, Waveform, barcode, boot, clock, formatBitrate, groupDigits, scramble, screenFilter, timecode, typewriter } from './hud.js';
 
 let token;
 let details;
@@ -447,6 +447,8 @@ function flash(button, text, reset) {
 async function initialize() {
   if (!window.chdss) throw new Error('The desktop bridge did not load. Open CHDSS.app / the portable executable, not host.html in a browser.');
   boot();
+  const filter = screenFilter($('fxToggle'));
+  $('fxToggle').onclick = () => filter.toggle();
   details = await window.chdss.details();
   token = details.hostToken;
   document.body.classList.add(`platform-${details.platform}`);

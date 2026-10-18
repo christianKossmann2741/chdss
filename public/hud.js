@@ -282,3 +282,24 @@ export function boot(root = globalThis.document) {
   });
   setTimeout(() => root.documentElement?.classList.remove('booting'), 1400);
 }
+
+/** The halftone/grain/scanline "screen filter" is opt-in and remembered per browser. */
+export function screenFilter(button, { storage = globalThis.localStorage, root = globalThis.document?.documentElement, key = 'chdss-screen-filter' } = {}) {
+  let enabled = false;
+  try { enabled = storage?.getItem(key) === 'on'; } catch { /* Preferences are optional. */ }
+  const apply = () => {
+    root?.classList?.toggle('fx', enabled);
+    button?.setAttribute('aria-pressed', String(enabled));
+    button?.setAttribute('title', `Screen filter: ${enabled ? 'on' : 'off'}`);
+    const label = button?.querySelector?.('[data-fx-label]');
+    if (label) label.textContent = `Filter · ${enabled ? 'on' : 'off'}`;
+  };
+  const set = value => {
+    enabled = Boolean(value);
+    try { storage?.setItem(key, enabled ? 'on' : 'off'); } catch { /* Preferences are optional. */ }
+    apply();
+    return enabled;
+  };
+  apply();
+  return { get enabled() { return enabled; }, set, toggle: () => set(!enabled) };
+}
