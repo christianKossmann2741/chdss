@@ -274,6 +274,7 @@ async function stopShare() {
   $('streamStats').textContent = 'Ready to broadcast';
   $('muteAudio').disabled = true;
   $('audioPanel').classList.remove('muted');
+  $('audioBuffer').textContent = '48k · stereo';
   setTitle('Standby');
   lockCapture(true);
   await audio?.stop();
@@ -298,7 +299,10 @@ async function startShare() {
     captured.getVideoTracks()[0].onended = stopShare;
     if ($('includeAudio').checked) {
       setRoute({ source: 'done', capture: 'done', audio: 'active' }, 'Opening filtered audio…');
-      const audio = new FilteredAudio(window.chdss, { onFailure: message => { void stopShare(); setError(`Sharing stopped: ${message}`); } });
+      const audio = new FilteredAudio(window.chdss, {
+        onFailure: message => { void stopShare(); setError(`Sharing stopped: ${message}`); },
+        onBuffer: ({ ms }) => { $('audioBuffer').textContent = `Buffer ≈ ${ms} ms`; }
+      });
       filteredAudio = audio;
       const result = await audio.start($('source').value);
       captured.addTrack(result.track);

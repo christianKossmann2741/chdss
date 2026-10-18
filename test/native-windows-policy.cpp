@@ -62,8 +62,9 @@ int main() { try {
   {
     // Coarse Windows 10 timers (~15.6 ms passes plus snapshot work) must still keep real time.
     // Previously only one 10 ms quantum left per pass, so output fell behind and capture stopped.
-    const std::uint64_t origin = 1000000000, delay = 2000000, pass = 186000; // 18.6 ms
-    OutputClock clock(origin, delay, 2500000);
+    const std::uint64_t origin = 1000000000, delay = OutputClock::default_delay, pass = 186000; // 18.6 ms
+    CHECK(delay <= 1000000); // lookahead is audible latency; keep it at or under 100 ms
+    OutputClock clock(origin);
     std::uint64_t now = origin; int resyncs = 0; std::int64_t emitted = 0;
     for (int i = 0; i < 2000; ++i) { // ~37 s
       auto checked = now; now += pass;
@@ -88,12 +89,12 @@ int main() { try {
     CHECK(!clock.resync(now));
     int burst = 0;
     while (clock.ready(now, checked)) { clock.advance(); ++burst; }
-    CHECK(burst >= 1 && burst <= 27);
+    CHECK(burst >= 1 && burst <= 13); // catch-up bursts stay within ~120 ms
     CHECK(clock.frame() > before);
     auto lag = static_cast<std::int64_t>(now - origin - delay) * 48000 / 10000000 - clock.frame();
     CHECK(lag >= 0 && lag < 48000 / 4);
     // Nothing is due before the quarantine elapses.
-    OutputClock fresh(origin, delay, 2500000);
+    OutputClock fresh(origin);
     CHECK(!fresh.ready(origin + delay, origin + delay));
     CHECK(fresh.ready(origin + delay + 100000, origin + delay));
   }

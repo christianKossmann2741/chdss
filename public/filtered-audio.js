@@ -1,9 +1,10 @@
 export class FilteredAudio {
-  constructor(bridge, { contextFactory = () => new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' }), nodeFactory = context => new AudioWorkletNode(context, 'chdss-filtered-audio', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] }), onFailure = () => {} } = {}) {
+  constructor(bridge, { contextFactory = () => new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' }), nodeFactory = context => new AudioWorkletNode(context, 'chdss-filtered-audio', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] }), onFailure = () => {}, onBuffer = () => {} } = {}) {
     this.bridge = bridge;
     this.contextFactory = contextFactory;
     this.nodeFactory = nodeFactory;
     this.onFailure = onFailure;
+    this.onBuffer = onBuffer;
     this.closed = false;
     this.earlyFailures = new Map();
   }
@@ -19,6 +20,9 @@ export class FilteredAudio {
       this.node = this.nodeFactory(this.context);
       this.destination = this.context.createMediaStreamDestination();
       this.node.connect(this.destination); // Never connect to local speakers.
+      this.node.port.onmessage = event => {
+        if (!this.closed && event.data?.type === 'buffer' && Number.isFinite(event.data.queuedFrames)) this.onBuffer({ ms: Math.round(event.data.queuedFrames / 48), trimmedMs: Math.round(event.data.trimmedFrames / 48) });
+      };
       this.node.onprocessorerror = () => {
         if (this.closed) return;
         const message = 'The filtered audio processor stopped. Restart sharing.';

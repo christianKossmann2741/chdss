@@ -183,7 +183,11 @@ class OutputClock {
   static std::int64_t frames(std::uint64_t ticks) { return static_cast<std::int64_t>(ticks * 48000 / 10000000); }
 public:
   static constexpr std::int64_t quantum = 480;
-  OutputClock(std::uint64_t origin, std::uint64_t delay, std::uint64_t max_lag) : origin_(origin), delay_(delay), max_lag_(max_lag) {}
+  // 100 ms lookahead covers WASAPI packet delivery (~10 ms) plus a coarse-timer pass with wide
+  // margin. Exclusion safety comes from `checked`, not from this delay. Lag beyond 120 ms is
+  // skipped so catch-up bursts stay small and cannot pile latency into the playback buffer.
+  static constexpr std::uint64_t default_delay = 1000000, default_max_lag = 1200000;
+  explicit OutputClock(std::uint64_t origin, std::uint64_t delay = default_delay, std::uint64_t max_lag = default_max_lag) : origin_(origin), delay_(delay), max_lag_(max_lag) {}
   std::uint64_t origin() const { return origin_; }
   std::int64_t frame() const { return frame_; }
   // Returns true when stale audio was skipped to restore real time.

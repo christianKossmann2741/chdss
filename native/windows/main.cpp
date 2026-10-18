@@ -378,8 +378,8 @@ void run_capture(Source source) {
   Output output;
   std::cerr << "{\"type\":\"ready\",\"sampleRate\":48000,\"channels\":2,\"scope\":\""
     << (source.scope == Scope::application ? "application" : "display") << "\"}\n" << std::flush;
-  // 200 ms timestamp-aligned quarantine/lookahead; skip (never emit) audio more than 250 ms late.
-  OutputClock clock(qpc_100ns(), 2000000, 2500000);
+  // Timestamp-aligned lookahead; audio more than 120 ms late is skipped, never emitted.
+  OutputClock clock(qpc_100ns());
   std::uint64_t next_sessions = 0;
   std::vector<std::uint32_t> sessions;
   std::set<std::pair<DWORD, std::uint64_t>> tainted;

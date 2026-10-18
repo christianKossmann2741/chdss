@@ -34,3 +34,33 @@ test('native audio worklet bounds latency and never emits NaN from malformed inp
   for (let n = 0; n < 100; n++) node.process([], [output]);
   assert.ok(output.every(channel => channel.every(Number.isFinite)));
 });
+
+function stream(node, { burstFrames = 0, seconds = 3 } = {}) {
+  const chunk = new Float32Array(2560).fill(0.1); // 1280 frames = 10 render quanta
+  if (burstFrames) for (let left = burstFrames; left > 0; left -= 1280) node.port.onmessage({ data: chunk });
+  const output = [new Float32Array(128), new Float32Array(128)];
+  let underruns = 0;
+  for (let n = 0; n < seconds * 375; n++) {
+    if (n % 10 === 0) node.port.onmessage({ data: chunk });
+    node.process([], [output]);
+    if (!node.buffering && output[0][127] === 0) underruns++;
+  }
+  return underruns;
+}
+
+test('a catch-up burst does not leave permanent audio delay: the buffer trims back to its cushion', async () => {
+  const node = await processor();
+  const messages = [];
+  node.port.postMessage = message => messages.push(message);
+  stream(node, { burstFrames: 8960 }); // ~187 ms arrives at once, as after a Windows helper stall
+  assert.ok(node.trimmedFrames > 4800, `trimmed ${node.trimmedFrames}`);
+  assert.ok(node.queuedFrames <= node.target + 1280 + 128, `queued ${node.queuedFrames}`);
+  assert.ok(messages.some(message => message.type === 'buffer' && Number.isFinite(message.queuedFrames)));
+});
+
+test('a healthy stream is never trimmed or starved', async () => {
+  const node = await processor();
+  const underruns = stream(node, { burstFrames: 1280 });
+  assert.equal(node.trimmedFrames, 0);
+  assert.equal(underruns, 0);
+});
