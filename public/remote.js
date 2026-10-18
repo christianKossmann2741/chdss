@@ -53,6 +53,17 @@ export class RelayPublisher {
     } catch (error) { if (generation === this.#generation) await this.unpublish(); throw error; }
   }
 
+  /** Outbound byte counters keyed by RTP stream, for the studio's uplink meter. */
+  async bytesSent() {
+    const counters = new Map();
+    const publications = this.#room?.localParticipant?.trackPublications?.values() ?? [];
+    for (const publication of publications) {
+      const report = await publication.track?.sender?.getStats?.();
+      report?.forEach(stat => { if (stat.type === 'outbound-rtp') counters.set(stat.id, stat.bytesSent ?? 0); });
+    }
+    return counters;
+  }
+
   setAudioEnabled(enabled) { for (const track of this.#tracks) if (track.kind === 'audio') track.enabled = enabled; }
 
   async unpublish() {

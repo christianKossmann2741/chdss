@@ -102,3 +102,60 @@ test('keyboard playback shortcuts ignore input fields and modifiers; volume and 
   f.$('volume').value = '0.45'; f.$('volume').listeners.input(); assert.equal(f.$('stream').volume,0.45); assert.equal(f.$('stream').muted,false);
   await key(' '); assert.equal(f.$('stream').paused,false); await key(' '); assert.equal(f.$('stream').paused,true); app.dispose();
 });
+
+test('blocked autoplay falls back to muted playback with an unmute action; interrupted play does not mute', async () => {
+  const f = fixture(); const app = await runtime(f); await app.start();
+  await f.sockets[0].onmessage({data: JSON.stringify({type:'signal',payload:{description:{type:'offer',sdp:'offer'}}})});
+  const video = f.$('stream'); let attempts = 0, gesture = false;
+  video.play = async () => { attempts++; if (!video.muted && !gesture) throw Object.assign(new Error('blocked'), { name: 'NotAllowedError' }); video.paused = false; };
+  f.peers[0].ontrack({track: track('video')}); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(video.muted, true); assert.equal(attempts, 2);
+  assert.equal(f.$('unmuteChip').classList.contains('hidden'), false);
+  gesture = true; await f.$('unmuteChip').listeners.click(); assert.equal(video.muted, false);
+  assert.equal(f.$('unmuteChip').classList.contains('hidden'), true);
+  app.dispose();
+  const g = fixture(); const second = await runtime(g); await second.start();
+  await g.sockets[0].onmessage({data: JSON.stringify({type:'signal',payload:{description:{type:'offer',sdp:'offer'}}})});
+  g.$('stream').play = async () => { throw Object.assign(new Error('interrupted'), { name: 'AbortError' }); };
+  g.peers[0].ontrack({track: track('video')}); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(g.$('stream').muted, false); assert.equal(g.$('unmuteChip').classList.contains('hidden'), true);
+  second.dispose();
+});
+
+test('player shortcuts adjust and remember volume, toggle stats and fill without touching credentials', async () => {
+  const f = fixture(); const saved = new Map(); f.env.localStorage = { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) };
+  const app = await runtime(f); await app.start();
+  for (const id of ['playButton', 'muteButton', 'volume']) f.$(id).disabled = false;
+  const key = (value, extra = {}) => f.env.document.listeners.keydown({key:value,target:{closest:()=>null},preventDefault(){},...extra});
+  f.$('stream').volume = 0.5;
+  await key('ArrowDown'); assert.equal(f.$('stream').volume, 0.45); assert.equal(saved.get('chdss-viewer-volume'), '0.45');
+  await key('ArrowUp', { repeat: true }); assert.equal(f.$('stream').volume, 0.5);
+  await key('i'); assert.equal(f.$('statsPanel').classList.contains('hidden'), false);
+  await key('Escape'); assert.equal(f.$('statsPanel').classList.contains('hidden'), true);
+  await key('?', { shiftKey: true }); assert.equal(f.$('helpPanel').classList.contains('hidden'), false);
+  await key('z'); assert.equal(f.$('stage').classList.contains('fill'), true); assert.equal(saved.get('chdss-viewer-fill'), '1');
+  await key('m', { repeat: true }); assert.equal(f.$('stream').muted, false, 'held keys only repeat volume');
+  assert.ok([...saved.keys()].every(name => !/token|password|pair/i.test(name)));
+  app.dispose();
+});
+
+test('stats panel reports codec, loss and jitter from receiver reports and clears when the broadcast stops', async () => {
+  const f = fixture(); const app = await runtime(f); await app.start();
+  await f.sockets[0].onmessage({data: JSON.stringify({type:'signal',payload:{description:{type:'offer',sdp:'offer'}}})});
+  const peer = f.peers[0]; peer.ontrack({track: track('video')}); peer.connectionState = 'connected'; peer.onconnectionstatechange();
+  let n = 0;
+  peer.getStats = async () => new Map([
+    ['v', { id: 'v', type: 'inbound-rtp', kind: 'video', codecId: 'c', bytesReceived: 1000 + n * 500000, timestamp: 1000 + n * 1000, framesPerSecond: 30, jitter: 0.004, packetsReceived: 100 + n * 99, packetsLost: n, framesDropped: 2 }],
+    ['c', { id: 'c', type: 'codec', mimeType: 'video/VP9' }]
+  ]);
+  const tick = [...f.timers.values()][0];
+  await tick(); n = 1; await tick();
+  assert.equal(f.$('statCodec').textContent, 'VP9');
+  assert.equal(f.$('statFps').textContent, '30');
+  assert.equal(f.$('statJitter').textContent, '4 ms');
+  assert.equal(f.$('statLoss').textContent, '1.0%');
+  assert.equal(f.$('statBitrate').textContent, '4.0 Mbps');
+  await f.sockets[0].onmessage({data: JSON.stringify({type:'stream-stopped'})});
+  assert.equal(f.$('statCodec').textContent, '—');
+  app.dispose();
+});

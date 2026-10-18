@@ -13,7 +13,7 @@ try {
   for (const entry of await readdir('server', { withFileTypes: true })) {
     if (entry.isFile() && /(?:\.js|\.json|\.md|\.sh|Dockerfile)$/.test(entry.name)) await cp(join('server', entry.name), join(root, 'server', entry.name));
   }
-  for (const name of ['index.html', 'viewer.js', 'styles.css', 'webrtc.js']) await cp(join('public', name), join(root, 'public', name));
+  for (const name of ['index.html', 'viewer.js', 'styles.css', 'webrtc.js', 'hud.js']) await cp(join('public', name), join(root, 'public', name));
   await cp('public/vendor', join(root, 'public/vendor'), { recursive: true });
   await cp('LICENSE', join(root, 'LICENSE'));
   await cp('.dockerignore', join(root, '.dockerignore'));

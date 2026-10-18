@@ -2,8 +2,10 @@ import { connectionPolicy, preferOpusStereo, tuneSender } from './webrtc.js';
 import { captureOptions, presets, relayOrigin, validateCapture } from './broadcast.js';
 import { RelayPublisher } from './remote.js';
 import { FilteredAudio } from './filtered-audio.js';
+import { FlapBoard, Sparkline, Ticker, Waveform, barcode, boot, clock, formatBitrate, groupDigits, scramble, timecode, typewriter } from './hud.js';
 
 let token;
+let details;
 const peers = new Map();
 const waitingViewers = new Set();
 let socket;
@@ -16,10 +18,19 @@ let meterFrame;
 const $ = id => document.getElementById(id);
 let starting = false;
 let stopping = false;
-let timer;
+let startedAt = 0;
 let remoteBusy = false;
 let closing = false;
 let relaySessionOpen = false;
+let relayHost = '';
+let uplinkRate = 0;
+let previousBytes = new Map();
+let previousSample = 0;
+const viewerFlaps = new FlapBoard($('viewerFlaps'), { length: 2 });
+const meter = new Waveform($('audioMeter'), { bars: 56 });
+const miniMeter = new Waveform($('miniWave'), { bars: 40 });
+const uplinkChart = new Sparkline($('uplinkChart'), { capacity: 60 });
+const ticker = new Ticker($('ticker'));
 const remote = new RelayPublisher((state, count) => {
   $('remoteStatus').textContent = state === 'connected' ? `Server connected · ${count} remote viewer${count === 1 ? '' : 's'}` : state === 'reconnecting' ? 'Reconnecting to server…' : 'Server disconnected';
   updateViewerCount();
@@ -29,6 +40,20 @@ const settings = () => ({ height: Number($('quality').value), fps: Number($('fra
 function lockCapture(locked) {
   for (const id of ['source', 'refreshSources', 'preset', 'quality', 'frameRate', 'bitrate', 'includeAudio']) $(id).disabled = locked;
   $('shareButton').disabled = locked || !$('source').value;
+  if (!locked && !stream) setRoute();
+}
+
+/** Status line + route rail. Each step is '', 'active', 'done' or 'skipped'. */
+function setRoute(steps = {}, message) {
+  const hasSource = Boolean($('source').value);
+  const state = { source: hasSource ? 'done' : 'active', capture: '', audio: '', air: '', ...steps };
+  for (const item of $('route').children) item.className = state[item.dataset.step] ?? '';
+  if (message === undefined) message = hasSource ? `Ready · ${$('source').selectedOptions[0]?.textContent ?? 'source'} · press start` : 'Select a source';
+  typewriter($('typeline'), message);
+}
+
+function setTitle(text) {
+  if ($('stateTitle').textContent !== text) scramble($('stateTitle'), text, { duration: 380 });
 }
 
 async function refreshSources() {
@@ -59,8 +84,13 @@ function send(message) {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
 }
 
+function viewerTotal() { return peers.size + waitingViewers.size + remote.viewers; }
+
 function updateViewerCount() {
-  $('viewerCount').textContent = String(peers.size + waitingViewers.size + remote.viewers);
+  const total = viewerTotal();
+  $('viewerCount').textContent = String(total);
+  viewerFlaps.set(total);
+  $('uplinkN').textContent = `N = ${peers.size + remote.viewers}`;
 }
 
 async function createPeer(viewerId) {
@@ -131,16 +161,84 @@ function startMeter(audioTrack) {
   meterContext = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
   const source = meterContext.createMediaStreamSource(new MediaStream([audioTrack]));
   const analyser = meterContext.createAnalyser();
-  analyser.fftSize = 256;
+  analyser.fftSize = 512;
   source.connect(analyser);
-  const samples = new Uint8Array(analyser.frequencyBinCount);
-  const draw = () => {
-    analyser.getByteFrequencyData(samples);
-    const level = samples.reduce((sum, value) => sum + value, 0) / samples.length / 255;
-    $('audioMeter').firstElementChild.style.width = `${Math.min(100, level * 180)}%`;
+  const samples = new Float32Array(analyser.fftSize);
+  let last = 0;
+  const draw = now => {
     meterFrame = requestAnimationFrame(draw);
+    if (now - last < 50) return;
+    last = now;
+    analyser.getFloatTimeDomainData(samples);
+    let peak = 0;
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+    // Perceptual curve so quiet program audio is still visibly alive.
+    const level = audioTrack.enabled ? Math.min(1, Math.sqrt(peak) * 1.15) : 0;
+    meter.push(level);
+    miniMeter.push(level);
   };
-  draw();
+  meterFrame = requestAnimationFrame(draw);
+}
+
+/** Measures actual bytes leaving this machine across LAN peers and the relay upload. */
+async function sampleUplink() {
+  const counters = new Map();
+  await Promise.all([...peers].map(async ([viewerId, peer]) => {
+    try { (await peer.getStats()).forEach(report => { if (report.type === 'outbound-rtp') counters.set(`${viewerId}:${report.id}`, report.bytesSent ?? 0); }); } catch { /* Stats are optional. */ }
+  }));
+  try { for (const [id, bytes] of await remote.bytesSent()) counters.set(`relay:${id}`, bytes); } catch { /* Stats are optional. */ }
+  const now = performance.now();
+  let delta = 0;
+  for (const [id, bytes] of counters) { const before = previousBytes.get(id); if (before !== undefined && bytes >= before) delta += bytes - before; }
+  uplinkRate = previousSample ? delta * 8 / ((now - previousSample) / 1000) : 0;
+  previousBytes = counters;
+  previousSample = now;
+}
+
+let beating = false;
+async function heartbeat() {
+  if (beating) return;
+  beating = true;
+  try { await pulse(); } finally { beating = false; }
+}
+
+async function pulse() {
+  const live = Boolean(stream);
+  if (live) {
+    const videoTrack = stream.getVideoTracks()[0];
+    const actual = videoTrack?.getSettings() ?? {};
+    const seconds = (performance.now() - startedAt) / 1000;
+    $('elapsed').textContent = timecode(seconds);
+    $('timecodeLabel').textContent = 'On air';
+    $('streamStats').textContent = `${actual.width ?? '—'} × ${actual.height ?? '—'} · ${Math.round(actual.frameRate ?? 0)} fps`;
+    const fidelity = actual.frameRate ? Math.min(0.99, actual.frameRate / Number($('frameRate').value)) : 0;
+    $('lockTag').textContent = `Lock ${fidelity.toFixed(2)}`;
+    await sampleUplink();
+    uplinkChart.push(uplinkRate);
+  } else {
+    $('elapsed').textContent = clock();
+    $('timecodeLabel').textContent = 'Local';
+    uplinkRate = 0;
+  }
+  $('uplinkValue').textContent = groupDigits(uplinkRate / 1000);
+  const lan = $('networkAdapter').selectedOptions[0]?.textContent?.split(' · ')[0] ?? '—';
+  const actual = live ? stream.getVideoTracks()[0]?.getSettings() ?? {} : {};
+  const { height, fps } = settings();
+  ticker.set([
+    ['Status', live ? 'On air' : starting ? 'Arming' : 'Standby', live ? 'hot' : ''],
+    ['Viewers', `${viewerTotal()} · LAN ${peers.size + waitingViewers.size} · NET ${remote.viewers}`],
+    ['Source', $('source').selectedOptions[0]?.textContent ?? '—'],
+    ['Capture', live ? `${actual.width ?? '—'}×${actual.height ?? '—'} @ ${Math.round(actual.frameRate ?? 0)} fps` : `${Number.isFinite(height) ? `${height}p` : 'native'} @ ${fps} fps`],
+    ['Uplink', live ? formatBitrate(uplinkRate) : 'idle', live && uplinkRate ? 'hot' : ''],
+    ['Cap', formatBitrate(Number($('bitrate').value))],
+    ['Audio', live ? $('audioStatus').textContent : $('includeAudio').checked ? 'Filtered · armed' : 'Video only'],
+    ['Codec', 'Opus 48k stereo · FEC'],
+    ['LAN', lan],
+    ['Relay', relaySessionOpen ? relayHost : 'Offline', relaySessionOpen ? 'hot' : ''],
+    ['Pairing', '192-bit · rotates each launch'],
+    ['Trackers', '0'],
+    ['Build', `CHDSS ${details?.version ?? ''}`]
+  ]);
 }
 
 async function stopShare() {
@@ -158,24 +256,31 @@ async function stopShare() {
   cancelAnimationFrame(meterFrame);
   meterContext?.close().catch(() => {});
   meterContext = null;
+  meter.clear();
+  miniMeter.clear();
+  uplinkChart.clear();
+  previousBytes = new Map();
+  previousSample = 0;
+  document.body.classList.remove('on-air');
   $('preview').srcObject = null;
+  $('previewFrame').classList.remove('has-video');
   $('previewEmpty').classList.remove('hidden');
   $('shareButton').classList.remove('hidden');
   $('stopButton').classList.add('hidden');
   $('liveBadge').textContent = 'Offline';
   $('liveBadge').className = 'badge waiting';
   $('audioStatus').textContent = 'Not captured';
-  $('audioMeter').firstElementChild.style.width = '0';
-  clearInterval(timer);
-  $('elapsed').textContent = '00:00';
+  $('lockTag').textContent = 'Lock 0.00';
   $('streamStats').textContent = 'Ready to broadcast';
   $('muteAudio').disabled = true;
+  $('audioPanel').classList.remove('muted');
+  setTitle('Standby');
   lockCapture(true);
   await audio?.stop();
   if (!audio) await window.chdss.stopAudio();
   await window.chdss.setSharing(false);
   try { await remote.unpublish(); } catch { setError('The Internet upload stopped unexpectedly. End the Internet session before reconnecting.'); }
-  } finally { stopping = false; lockCapture(starting); }
+  } finally { stopping = false; lockCapture(starting); void heartbeat(); }
 }
 
 async function startShare() {
@@ -184,17 +289,20 @@ async function startShare() {
   const generation = ++shareGeneration;
   lockCapture(true);
   setError();
+  setTitle('Arming');
+  setRoute({ source: 'done', capture: 'active' }, 'Acquiring capture…');
   let captured;
   try {
     await window.chdss.selectSource($('source').value);
     captured = await navigator.mediaDevices.getDisplayMedia(captureOptions(settings(), false));
     captured.getVideoTracks()[0].onended = stopShare;
     if ($('includeAudio').checked) {
+      setRoute({ source: 'done', capture: 'done', audio: 'active' }, 'Opening filtered audio…');
       const audio = new FilteredAudio(window.chdss, { onFailure: message => { void stopShare(); setError(`Sharing stopped: ${message}`); } });
       filteredAudio = audio;
       const result = await audio.start($('source').value);
       captured.addTrack(result.track);
-      audioLabel = result.scope === 'application' ? 'Selected application audio' : 'Screen audio · Discord excluded';
+      audioLabel = result.scope === 'application' ? 'Selected application' : 'Screen · Discord excluded';
     }
     if (generation !== shareGeneration || captured.getVideoTracks()[0].readyState === 'ended') { captured.getTracks().forEach(track => track.stop()); return; }
     const { audioTrack, videoTrack } = validateCapture(captured, $('includeAudio').checked);
@@ -204,11 +312,15 @@ async function startShare() {
     videoTrack.onended = stopShare;
     if (audioTrack) audioTrack.onended = () => { void stopShare(); setError('Sharing stopped because filtered audio ended. Restart sharing.'); };
     $('preview').srcObject = stream;
+    $('previewFrame').classList.add('has-video');
     $('previewEmpty').classList.add('hidden');
     $('shareButton').classList.add('hidden');
     $('stopButton').classList.remove('hidden');
     $('liveBadge').textContent = 'Live';
     $('liveBadge').className = 'badge live';
+    document.body.classList.add('on-air');
+    setTitle('On air');
+    setRoute({ source: 'done', capture: 'done', audio: audioTrack ? 'done' : 'skipped', air: 'done' }, 'On air · share the viewer link');
     $('audioStatus').textContent = audioTrack ? `${audioLabel} · live` : 'Video only · audio off';
     $('muteAudio').disabled = !audioTrack;
     $('muteAudio').textContent = 'Mute';
@@ -216,13 +328,8 @@ async function startShare() {
     if (audioTrack) { try { startMeter(audioTrack); } catch { /* Meter failure must not stop capture. */ } }
     await window.chdss.setSharing(true);
     if (!stream) return;
-    const startedAt = performance.now();
-    timer = setInterval(() => {
-      const seconds = Math.floor((performance.now() - startedAt) / 1000);
-      $('elapsed').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-      const actual = videoTrack.getSettings();
-      $('streamStats').textContent = `${actual.width ?? '—'} × ${actual.height ?? '—'} · ${Math.round(actual.frameRate ?? 0)} fps`;
-    }, 1000);
+    startedAt = performance.now();
+    void heartbeat();
     for (const id of [...waitingViewers]) {
       try { await createPeer(id); } catch (error) { removePeer(id); setError(`A LAN viewer could not connect: ${error.message}`); }
     }
@@ -236,7 +343,18 @@ async function startShare() {
     await stopShare();
     if (error.name !== 'NotAllowedError') setError(error.message);
     else setError('Screen sharing was cancelled or denied. Allow screen and system-audio access, then try again.');
+    setRoute({}, 'Fault · see alert');
   } finally { starting = false; if (!stream) lockCapture(false); }
+}
+
+function syncSpec() {
+  const preset = $('preset').selectedOptions[0]?.textContent ?? 'Custom';
+  const custom = presets[$('preset').value] && (settings().fps !== presets[$('preset').value].fps || Number($('bitrate').value) !== presets[$('preset').value].bitrate || $('quality').value !== String(presets[$('preset').value].height));
+  scramble($('specTitle'), custom ? `${preset} · custom` : preset, { duration: 320 });
+  $('capLabel').textContent = `Cap · ${formatBitrate(Number($('bitrate').value))}`;
+  uplinkChart.ceiling = Number($('bitrate').value);
+  uplinkChart.draw();
+  if (!stream && !starting) setRoute();
 }
 
 function applyPreset() {
@@ -245,6 +363,7 @@ function applyPreset() {
   $('frameRate').value = String(preset.fps);
   $('bitrate').value = String(preset.bitrate);
   try { localStorage.setItem('chdss-preset', $('preset').value); } catch { /* Preferences are optional. */ }
+  syncSpec();
 }
 
 function selectNetworkAddress() {
@@ -303,6 +422,7 @@ async function connectInternet() {
   $('remoteStatus').textContent = 'Creating private session…';
   try {
     relaySessionOpen = true;
+    relayHost = new URL(origin).host;
     $('remoteDisconnect').classList.remove('hidden');
     const session = await window.chdss.createRelay(origin, $('publisherKey').value);
     $('publisherKey').value = '';
@@ -319,11 +439,24 @@ async function connectInternet() {
   } finally { remoteBusy = false; $('remoteConnect').disabled = relaySessionOpen; }
 }
 
+function flash(button, text, reset) {
+  button.textContent = text;
+  setTimeout(() => { button.textContent = reset; }, 1200);
+}
+
 async function initialize() {
   if (!window.chdss) throw new Error('The desktop bridge did not load. Open CHDSS.app / the portable executable, not host.html in a browser.');
-  const details = await window.chdss.details();
+  boot();
+  details = await window.chdss.details();
   token = details.hostToken;
   document.body.classList.add(`platform-${details.platform}`);
+  $('versionLabel').textContent = `CHDSS ${details.version ?? ''} · private · no trackers`;
+  $('shareShortcut').textContent = details.platform === 'darwin' ? '⌘⇧S' : 'Ctrl⇧S';
+  // A decorative per-launch label; deliberately unrelated to any pairing secret.
+  const label = `CH-${String(details.version ?? '3').split('.')[0]}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+  $('specCode').textContent = label;
+  barcode($('specBarcode'), label);
+  viewerFlaps.set(0);
   refreshViewerLinks(details);
   $('networkAdapter').onchange = selectNetworkAddress;
   $('refreshNetworks').onclick = refreshNetworks;
@@ -331,12 +464,13 @@ async function initialize() {
   try { const saved = localStorage.getItem('chdss-preset'); if (presets[saved]) $('preset').value = saved; } catch { /* Optional preference. */ }
   applyPreset();
   $('preset').onchange = applyPreset;
-  $('source').onchange = () => { $('sourceSummary').textContent = $('source').selectedOptions[0]?.textContent ?? 'Select a source'; $('shareButton').disabled = !$('source').value; };
+  for (const id of ['quality', 'frameRate', 'bitrate']) $(id).onchange = syncSpec;
+  $('source').onchange = () => { $('sourceSummary').textContent = $('source').selectedOptions[0]?.textContent ?? 'Select a source'; $('shareButton').disabled = !$('source').value; setRoute(); };
   $('refreshSources').onclick = refreshSources;
   $('permissions').onclick = () => window.chdss.openPermissions();
   $('shareButton').onclick = startShare;
   $('stopButton').onclick = stopShare;
-  $('copyUrl').onclick = async () => { await window.chdss.copy($('viewerUrl').value); $('copyUrl').textContent = 'Copied'; setTimeout(() => { $('copyUrl').textContent = 'Copy'; }, 1200); };
+  $('copyUrl').onclick = async () => { await window.chdss.copy($('viewerUrl').value); flash($('copyUrl'), 'Copied', 'Copy'); };
   $('muteAudio').onclick = () => {
     const track = stream?.getAudioTracks()[0];
     if (!track) return;
@@ -344,6 +478,7 @@ async function initialize() {
     remote.setAudioEnabled(track.enabled);
     $('muteAudio').textContent = track.enabled ? 'Mute' : 'Unmute';
     $('muteAudio').setAttribute('aria-pressed', String(!track.enabled));
+    $('audioPanel').classList.toggle('muted', !track.enabled);
     $('audioStatus').textContent = `${audioLabel} · ${track.enabled ? 'live' : 'muted'}`;
   };
   for (const [id, internet] of [['modeLan', false], ['modeInternet', true]]) $(id).onclick = () => {
@@ -355,11 +490,14 @@ async function initialize() {
   $('remoteConnect').onclick = connectInternet;
   $('remoteDisconnect').onclick = endInternet;
   $('revealPassword').onclick = () => { const visible = $('streamPassword').type === 'password'; $('streamPassword').type = visible ? 'text' : 'password'; $('revealPassword').textContent = visible ? 'Hide' : 'Show'; $('revealPassword').setAttribute('aria-pressed', String(visible)); };
-  $('copyInvite').onclick = async () => { await window.chdss.copy(`Watch my CHDSS stream: ${$('remoteViewerUrl').value}\nPassword: ${$('streamPassword').value}`); $('copyInvite').textContent = 'Invitation copied'; setTimeout(() => { $('copyInvite').textContent = 'Copy invitation'; }, 1200); };
+  $('copyInvite').onclick = async () => { await window.chdss.copy(`Watch my CHDSS stream: ${$('remoteViewerUrl').value}\nPassword: ${$('streamPassword').value}`); flash($('copyInvite'), 'Invitation copied', 'Copy invite & password'); };
   window.chdss.onCommand(command => {
     if (command === 'refresh-sources') void refreshSources();
     if (command === 'toggle-sharing') void (stream ? stopShare() : startShare());
   });
+  addEventListener('resize', () => uplinkChart.draw());
+  setInterval(() => { void heartbeat(); }, 1000);
+  void heartbeat();
   connect();
   await refreshSources();
 }

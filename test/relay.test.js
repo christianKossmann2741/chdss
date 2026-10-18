@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import http from 'node:http';
@@ -121,6 +121,25 @@ test('static viewer assets are allowlisted with CSP; host files and traversal st
   assert.match(response.headers.get('content-security-policy'), /script-src 'self'/);
   assert.match(response.headers.get('content-security-policy'), /frame-ancestors 'none'/);
   for (const path of ['/host.html', '/host.js', '/src/main.js', '/package.json', '/%2e%2e%2fpackage.json', '/viewer.js']) assert.equal((await f.request(path)).status, 404, path);
+});
+
+test('viewer HUD module and bundled fonts are served same-origin with a font-only CSP allowance', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'chdss-relay-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  await mkdir(join(dir, 'vendor/fonts'), { recursive: true });
+  await writeFile(join(dir, 'hud.js'), 'export {};');
+  await writeFile(join(dir, 'vendor/fonts/plex-mono-400.woff2'), 'wOF2');
+  await writeFile(join(dir, 'vendor/fonts/LICENSE-ibm-plex-mono.txt'), 'license');
+  const f = await fixture(t, { publicDir: dir });
+  const hud = await f.request('/hud.js');
+  assert.equal(hud.status, 200);
+  assert.match(hud.headers.get('content-type'), /text\/javascript/);
+  const font = await f.request('/vendor/fonts/plex-mono-400.woff2');
+  assert.equal(font.status, 200);
+  assert.equal(font.headers.get('content-type'), 'font/woff2');
+  assert.match(font.headers.get('content-security-policy'), /font-src 'self'/);
+  assert.doesNotMatch(font.headers.get('content-security-policy'), /fonts\.g/);
+  for (const path of ['/vendor/fonts/LICENSE-ibm-plex-mono.txt', '/vendor/fonts/unknown.woff2']) assert.equal((await f.request(path)).status, 404, path);
 });
 
 test('configuration rejects insecure origins unless explicitly loopback-only development', () => {

@@ -68,9 +68,10 @@ export function createRelayServer(options) {
   if (typeof ownerKey !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(ownerKey)) throw Error('Owner key must contain at least 32 random bytes, encoded as hex/base64url');
   if (typeof apiKey !== 'string' || !apiKey || typeof apiSecret !== 'string' || apiSecret.length < 32) throw Error('LiveKit key and 32-byte secret required');
   const publicDir = resolve(options.publicDir ?? fileURLToPath(new URL('../public', import.meta.url)));
-  const staticFiles = new Set(['/index.html', '/styles.css', '/styles.js', '/viewer.js', '/webrtc.js', '/relay.js', '/vendor/livekit-client.js', '/vendor/livekit-client.esm.js']);
+  const staticFiles = new Set(['/index.html', '/styles.css', '/viewer.js', '/webrtc.js', '/hud.js', '/vendor/livekit-client.js', '/vendor/livekit-client.esm.js',
+    ...['plex-mono-400', 'plex-mono-500', 'plex-mono-600', 'inter-tight-500', 'inter-tight-700', 'instrument-serif-400', 'instrument-serif-400-italic'].map(name => `/vendor/fonts/${name}.woff2`)]);
   const securityHeaders = {
-    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss: https:; media-src 'self' blob:; img-src 'self' data:; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss: https:; media-src 'self' blob:; img-src 'self' data:; font-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()', 'X-Frame-Options': 'DENY',
     ...(devOrigin ? {} : { 'Strict-Transport-Security': 'max-age=31536000' }),
@@ -181,8 +182,8 @@ export function createRelayServer(options) {
           const file = resolve(root, '.' + asset);
           if (await realpath(file) !== file) return send(404, { error: 'Not found' });
           const content = await readFile(file);
-          const type = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[extname(file)];
-          res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Content-Length': content.length });
+          const type = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2' }[extname(file)];
+          res.writeHead(200, { 'Content-Type': type, 'Content-Length': content.length });
           return res.end(req.method === 'HEAD' ? undefined : content);
         } catch { return send(404, { error: 'Not found' }); }
       }

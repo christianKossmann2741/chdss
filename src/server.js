@@ -6,7 +6,7 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const publicDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const send = (socket, message) => socket.readyState === WebSocket.OPEN && socket.send(JSON.stringify(message));
 const sameToken = (actual, expected) => {
   const a = Buffer.from(String(actual ?? ''));
@@ -65,7 +65,7 @@ export async function createShareServer({ port = 41730, token, hostToken = rando
         'cache-control': extname(path) === '.html' ? 'no-store' : 'public, max-age=300',
         'x-content-type-options': 'nosniff',
         'referrer-policy': 'no-referrer',
-        'content-security-policy': "default-src 'self'; connect-src 'self' ws: wss: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+        'content-security-policy': "default-src 'self'; connect-src 'self' ws: wss: https:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"
       });
       response.end(request.method === 'HEAD' ? undefined : body);
     } catch (error) {

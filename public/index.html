@@ -2,30 +2,128 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#090b0c">
   <meta name="referrer" content="no-referrer">
   <meta name="description" content="Christian's Handy Dandy Screen Share — a private screen, shared with you.">
   <title>CHDSS — Viewer</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body class="viewer-page">
+  <div class="fx-sweep" aria-hidden="true"></div>
   <main class="viewer-shell">
-    <header class="viewer-topbar"><div class="brand"><svg class="signal-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M5 20V12m7 13V7m8 18V7m7 13V12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg><span>CHDSS</span><span class="topbar-divider"></span><h1>Screen share</h1></div><div class="topbar-status"><button id="logoutButton" class="quiet-button hidden" type="button">Leave session</button><div id="connectionBadge" class="badge waiting" role="status">Connecting</div></div></header>
-    <section id="stage" class="stage" aria-label="Shared screen">
+    <header class="hud-top viewer-topbar">
+      <div class="hud-top-left" data-boot="1">
+        <span class="hud-label" data-scramble>Feed 01 / 01 · CHDSS</span>
+        <span id="transportLabel" class="hud-label dim">Establishing a private connection</span>
+      </div>
+      <div class="hud-top-right">
+        <button id="logoutButton" class="ghost hidden" type="button">Leave session</button>
+        <div id="connectionBadge" class="badge waiting" role="status" data-boot="2">Connecting</div>
+        <div class="flap-block" data-boot="3" title="Frames per second received">
+          <div id="fpsFlaps" class="flapboard" aria-hidden="true"></div>
+          <div class="flap-caption" aria-hidden="true"><span>Frames</span><span>Per sec</span></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="ruler" aria-hidden="true"><span>000</span><span>001</span><span>002</span><span>003</span><span class="mark">004</span><span>005</span><span>006</span><span>007</span><span>008</span></div>
+
+    <section id="stage" class="stage" aria-label="Shared screen" tabindex="-1" data-boot="2">
       <video id="stream" autoplay playsinline aria-label="Live screen share"></video>
-      <div id="emptyState" class="empty-state"><svg class="screen-illustration" viewBox="0 0 240 170" fill="none" aria-hidden="true"><rect x="30" y="22" width="180" height="112" rx="9" stroke="currentColor" stroke-width="1.5"/><path d="M30 115h180M97 153h46m-33-19-3 19m23-19 3 19" stroke="currentColor" stroke-width="1.5"/><path class="illustration-signal" d="M95 79V66m16 25V54m18 37V54m16 25V66" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg><h2 id="emptyTitle">A screen is on its way.</h2><p id="emptyMessage">Connecting to your private screen share.</p><button id="retryButton" class="hidden" type="button">Try again</button></div>
+      <div id="lockFrame" class="lock-frame brackets hidden" aria-hidden="true">
+        <span class="frame-tag tl tag"><b>Host</b>·<span id="lockTag">Screen</span></span>
+        <span id="lockScore" class="frame-tag tr hud-label">Signal 0.00</span>
+      </div>
+
+      <div id="emptyState" class="empty-state">
+        <svg class="target" viewBox="0 0 120 120" fill="none" aria-hidden="true"><circle class="spin" cx="60" cy="60" r="52" stroke="currentColor" stroke-dasharray="2 6"/><circle class="spin-rev" cx="60" cy="60" r="38" stroke="currentColor" stroke-width="2" stroke-dasharray="1 9"/><path d="M60 30v14M60 76v14M30 60h14M76 60h14" stroke="currentColor"/><rect x="56" y="56" width="8" height="8" stroke="#ff5b35"/></svg>
+        <h2 id="emptyTitle" class="serif-title">A screen is on its way.</h2>
+        <p id="emptyMessage" class="hud-label typing">Connecting to your private screen share.</p>
+        <button id="retryButton" class="hidden" type="button">Try again</button>
+      </div>
+
       <div id="unlockPanel" class="unlock-overlay hidden">
-        <form id="joinForm" class="unlock-form">
-          <div class="lock-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
-          <p class="eyebrow">PRIVATE SCREEN SHARE</p><h2>You’re invited.</h2><p>Enter the session password from your host.<br>No account. Just a shared screen.</p>
-          <label class="field-label" for="joinPassword">Session password</label><input id="joinPassword" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Enter session password" aria-describedby="joinError"><p id="joinError" class="form-error" role="alert"></p><button id="joinButton" class="primary full-width" type="submit">Join private session</button><span class="privacy-caption">Your password is never saved on this device.</span>
+        <form id="joinForm" class="ticket">
+          <div class="ticket-head"><span>Admit one · Private session</span><span class="tag signal">CHDSS</span></div>
+          <h2>You’re invited<span class="dot">.</span></h2>
+          <p>Enter the session password from your host. No account. Just a shared screen.</p>
+          <label class="field-label" for="joinPassword">Session password</label>
+          <input id="joinPassword" type="password" required autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Enter session password" aria-describedby="joinError">
+          <p id="joinError" class="form-error" role="alert"></p>
+          <button id="joinButton" class="go" type="submit">Join private session</button>
+          <div class="ticket-foot"><span>Password never saved<br>on this device</span><svg id="ticketBarcode" aria-hidden="true"></svg></div>
         </form>
       </div>
-      <div class="controls" aria-label="Playback controls"><div class="control-group"><button id="playButton" type="button" disabled title="Play or pause (Space)">Play with audio</button><button id="muteButton" class="quiet-button" type="button" aria-pressed="false" title="Mute (M)" disabled>Mute</button><label class="volume-control"><span class="sr-only">Volume</span><input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" disabled></label></div><div class="control-group"><button id="pipButton" type="button" disabled title="Picture in Picture">Picture in Picture</button><button id="fullscreenButton" type="button" disabled title="Fullscreen (F)">Fullscreen</button></div></div>
+
+      <button id="unmuteChip" class="unmute-chip hidden" type="button"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 9a4 4 0 0 1 0 6m2.5-9a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="1.6"/></svg><span id="unmuteLabel">Tap to unmute</span></button>
+      <div id="toast" class="toast tag" role="status" aria-live="polite"></div>
+
+      <aside id="statsPanel" class="stats-panel panel hidden" aria-label="Stream statistics">
+        <header class="panel-head"><span>Eval · downlink</span><span id="statTransport">—</span></header>
+        <dl>
+          <dt>Resolution</dt><dd id="statRes">—</dd>
+          <dt>Frame rate</dt><dd id="statFps">—</dd>
+          <dt>Bitrate</dt><dd id="statBitrate" class="hot">—</dd>
+          <dt>Codec</dt><dd id="statCodec">—</dd>
+          <dt>Latency ≈</dt><dd id="statLatency">—</dd>
+          <dt>Jitter</dt><dd id="statJitter">—</dd>
+          <dt>Packet loss</dt><dd id="statLoss">—</dd>
+          <dt>Frames dropped</dt><dd id="statDropped">—</dd>
+        </dl>
+        <div class="chart"><canvas id="bitrateChart" aria-hidden="true"></canvas></div>
+      </aside>
+
+      <aside id="helpPanel" class="help-panel panel hidden" aria-label="Keyboard shortcuts">
+        <header class="panel-head"><span>Shortcuts</span><span>?</span></header>
+        <dl>
+          <dt><kbd>Space</kbd> <kbd>K</kbd></dt><dd>Play / pause</dd>
+          <dt><kbd>M</kbd></dt><dd>Mute</dd>
+          <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>Volume</dd>
+          <dt><kbd>F</kbd></dt><dd>Fullscreen</dd>
+          <dt><kbd>P</kbd></dt><dd>Picture in picture</dd>
+          <dt><kbd>Z</kbd></dt><dd>Fit / fill</dd>
+          <dt><kbd>I</kbd></dt><dd>Stats</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close panels</dd>
+        </dl>
+      </aside>
+
+      <div id="controls" class="controls" aria-label="Playback controls">
+        <div class="control-group">
+          <button id="playButton" class="icon-btn" type="button" data-state="off" aria-label="Play" title="Play / pause (Space)" disabled>
+            <svg class="when-off" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4.5v15L19 12 7 4.5Z" fill="currentColor"/></svg>
+            <svg class="when-on" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" fill="currentColor"/></svg>
+          </button>
+          <button id="muteButton" class="icon-btn" type="button" data-state="off" aria-pressed="false" aria-label="Mute" title="Mute (M)" disabled>
+            <svg class="when-off" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M17 9a4 4 0 0 1 0 6m2.5-9a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="1.6"/></svg>
+            <svg class="when-on" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m16.5 9.5 5 5m0-5-5 5" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+          <label class="volume-control"><span class="sr-only">Volume</span><input id="volume" type="range" min="0" max="1" step="0.05" value="1" aria-label="Volume" disabled></label>
+          <span class="live-chip">Live</span>
+          <div id="audioWave" class="waveform micro" aria-hidden="true" title="Incoming audio level"></div>
+        </div>
+        <div class="control-group">
+          <button id="statsButton" class="icon-btn" type="button" aria-pressed="false" aria-label="Stream statistics" title="Stats (I)"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20V10m5.5 10V4M15 20v-7m5.5 7V8" stroke="currentColor" stroke-width="1.6"/></svg></button>
+          <button id="fitButton" class="icon-btn" type="button" data-state="off" aria-pressed="false" aria-label="Fill the frame" title="Fit / fill (Z)">
+            <svg class="when-off" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2 2"/><path d="M7 12h10M7 12l2.5-2.5M7 12l2.5 2.5M17 12l-2.5-2.5M17 12l-2.5 2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+            <svg class="when-on" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" stroke="currentColor" stroke-width="1.6"/><path d="M10 12H6m0 0 2-2m-2 2 2 2M14 12h4m0 0-2-2m2 2-2 2" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+          <button id="pipButton" class="icon-btn" type="button" aria-label="Picture in Picture" title="Picture in Picture (P)" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="5" width="18" height="14" stroke="currentColor" stroke-width="1.6"/><rect x="12" y="11" width="7" height="6" fill="currentColor"/></svg></button>
+          <button id="helpButton" class="icon-btn" type="button" aria-pressed="false" aria-label="Keyboard shortcuts" title="Shortcuts (?)"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="6" width="18" height="12" stroke="currentColor" stroke-width="1.6"/><path d="M7 10h1m3 0h2m3 0h1M8 14h8" stroke="currentColor" stroke-width="1.6"/></svg></button>
+          <button id="fullscreenButton" class="icon-btn" type="button" data-state="off" aria-label="Fullscreen" title="Fullscreen (F)" disabled>
+            <svg class="when-off" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" stroke="currentColor" stroke-width="1.6"/></svg>
+            <svg class="when-on" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" stroke="currentColor" stroke-width="1.6"/></svg>
+          </button>
+        </div>
+      </div>
     </section>
-    <footer class="viewer-footer"><span id="transportLabel">Establishing a private connection</span><span id="stats" class="mono">No media received</span></footer>
-    <p class="keyboard-hint"><kbd>Space</kbd> play / pause <span>·</span> <kbd>M</kbd> mute <span>·</span> <kbd>F</kbd> fullscreen</p>
+
+    <footer class="hud-bottom">
+      <span id="stats" class="stats-line">No media received</span>
+      <div class="ticker"><div id="ticker" class="ticker-track" aria-hidden="true"></div></div>
+      <span class="timecode"><span id="timecodeLabel">Local</span><span id="timecode">--:--:--</span></span>
+    </footer>
   </main>
   <script type="module" src="./viewer.js"></script>
 </body>

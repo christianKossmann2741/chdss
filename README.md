@@ -1,6 +1,12 @@
 # Christian's Handy Dandy Screen Share
 
-**CHDSS 2.2** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
+**CHDSS 3.0** is a private screen-and-audio sharing studio for Mac and Windows. Run the self-contained app, choose a screen or window, and invite browser viewers. **LAN is the default. Internet sharing is an explicit option through your own VPS**, with a random session password and no viewer accounts.
+
+## What's new in 3.0
+
+- **A completely redesigned broadcast studio and viewer.** A live HUD replaces the old panels: on-air title and status line, a SOURCE → CAPTURE → AUDIO → ON AIR progress rail, split-flap viewer counter, measured upload bitrate chart against your bitrate cap, a rolling audio waveform, and a ticker tape of real session telemetry. Fonts ship with the app and relay; nothing loads from a third-party CDN.
+- **A rebuilt player.** Video starts automatically; browsers that block sound get muted playback with a clear **Tap to unmute** instead of a blank frame. Controls auto-hide while watching, and so does the cursor. Double-click toggles fullscreen. Adds fit/fill, a stats panel (resolution, frame rate, bitrate, codec, estimated latency, jitter, packet loss, dropped frames), an incoming-audio meter, volume memory, a shortcut sheet, screen wake lock, media-key support and automatic recovery when a LAN connection fails.
+- Respects *reduce motion* system settings.
 
 ## What it does
 
@@ -27,7 +33,7 @@
 
 ## Install
 
-Download the portable applications from the [2.2.0 release](https://github.com/christianKossmann2741/chdss/releases/tag/v2.2.0). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. **2.2.0 is a pre-release pending real-machine audio-isolation acceptance tests, including Windows 10.** The latest stable release remains available separately.
+Download the portable applications from the [3.0.0 release](https://github.com/christianKossmann2741/chdss/releases/tag/v3.0.0). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. **3.0.0 is a pre-release pending real-machine audio-isolation acceptance tests, including Windows 10.** The latest stable release remains available separately.
 
 ### macOS
 
@@ -63,12 +69,12 @@ The installer uses `%LOCALAPPDATA%\CHDSS`, creates `%LOCALAPPDATA%\CHDSS-command
 ## Use
 
 1. Open the portable app on the computer whose screen will be shared.
-2. Start with **Balanced (1080p / 30 FPS / 5 Mbps)**. Use **Economy (720p / 30 FPS / 2.5 Mbps)** for less stable connections, **Motion** for 60 FPS, or **Detail** for text. Bitrate is a cap, not a measured speed.
+2. Start with the **Balanced** preset on the spec card (1080p / 30 FPS / 5 Mbps). Use **Economy (720p / 30 FPS / 2.5 Mbps)** for less stable connections, **Motion** for 60 FPS, or **Detail** for text. Bitrate is a cap, not a measured speed.
 3. Select the screen or window in CHDSS.
-4. Click **Start sharing**.
-5. Play a sound in the shared application and confirm the audio meter moves. If native filtering cannot start, CHDSS refuses to silently downgrade or capture the full system mix. Uncheck **Include filtered audio** only when you intentionally want video only. A live track alone is not proof that audible samples are reaching viewers.
+4. Click **Start broadcast**. The progress rail lights up as capture and audio come online.
+5. Play a sound in the shared application and confirm the audio waveform moves. If native filtering cannot start, CHDSS refuses to silently downgrade or capture the full system mix. Uncheck **Include filtered audio** only when you intentionally want video only. A live track alone is not proof that audible samples are reaching viewers.
 6. Choose **Network adapter / IP address** beside the viewer link, then **Copy**. Ethernet, Wi-Fi and virtual adapters such as ZeroTier are listed by their real IP and adapter name. Send the link only to people on that network. Anyone holding the current link can watch until CHDSS exits.
-7. On the viewer, click **Play with audio** if browser autoplay policy muted or paused the feed. Use **Picture in Picture** when enabled.
+7. On the viewer, click **Tap to unmute** if the browser's autoplay policy started the feed muted. Press **I** for live stream statistics and **?** for all shortcuts.
 
 The pairing code changes every time the app starts. Closing CHDSS stops the HTTP/signaling server and every media peer.
 
@@ -90,7 +96,7 @@ In CHDSS, choose **Share access → Internet**, enter your HTTPS server origin a
 ### Keyboard controls
 
 - Desktop: **Cmd/Ctrl+Shift+S** starts/stops sharing; **Cmd/Ctrl+R** refreshes sources.
-- Viewer: **Space** plays/pauses, **M** mutes, **F** enters/exits fullscreen. Shortcuts do not fire while typing a password.
+- Viewer: **Space**/**K** play/pause, **M** mute, **↑/↓** volume, **F** fullscreen (or double-click), **P** Picture in Picture, **Z** fit/fill, **I** stats, **?** shortcut sheet, **Esc** closes panels. Shortcuts do not fire while typing a password. Volume, fit mode and the stats panel are remembered per browser; invitation codes and passwords never are.
 
 ## Audio reliability
 
@@ -153,7 +159,12 @@ npm start
 npm run dist:win
 npm run dist:mac
 npm run dist:server
+npm run preview
 ```
+
+`npm run preview` serves the studio with a mocked desktop bridge (synthetic screen and tone) next to a real LAN viewer at `http://127.0.0.1:41792/host.html` and `http://127.0.0.1:41792/#preview-viewer`, for iterating on the interface in any browser.
+
+Interface fonts (IBM Plex Mono, Inter Tight, Instrument Serif; SIL Open Font License) are copied from npm into `public/vendor/fonts` by `npm run build:web`, with their licenses.
 
 
 The test suite covers pairing-role isolation, malformed inputs, relay password revocation, least-privilege tokens, rate limits, native-helper lifecycle, bounded PCM buffering, network-adapter inventory, UI controls, and packaging. `node scripts/smoke-filtered.js` verifies synthetic PCM through the real AudioWorklet and decoded LAN audio, including mute, stop/re-share, denial, and fatal-filter cleanup. `npx playwright install chromium && npm run smoke` adds a real Docker LiveKit SFU. Synthetic transport verification does **not** establish native OS audio isolation or public-VPS firewall reachability. `node scripts/verify-mac.js` launches the built Mac bundle and tests native screen capture when permissions permit. CI compiles the native helpers and runs native policy/PCM tests before release packaging.
