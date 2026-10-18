@@ -34,7 +34,7 @@
 
 ## Install
 
-Download the portable applications from the [3.0.2 release](https://github.com/christianKossmann2741/chdss/releases/tag/v3.0.2). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. Native audio isolation is covered by policy and synthetic PCM tests; physical acceptance on every OS build (notably Windows 10) is still recommended before relying on it. See the [macOS](native/macos/README.md) and [Windows](native/windows/README.md) notes.
+Download the portable applications from the [3.0.3 release](https://github.com/christianKossmann2741/chdss/releases/tag/v3.0.3). No source checkout or Node/npm is needed to run either desktop download. `SHA256SUMS` accompanies each release. Native audio isolation is covered by policy and synthetic PCM tests; physical acceptance on every OS build (notably Windows 10) is still recommended before relying on it. See the [macOS](native/macos/README.md) and [Windows](native/windows/README.md) notes.
 
 ### macOS
 
