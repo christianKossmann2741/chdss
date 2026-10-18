@@ -2,6 +2,7 @@
 #include <iostream>
 #include <stdexcept>
 using namespace chdss;
+static_assert(OutputClock::default_delay <= 1000000, "lookahead is audible latency; keep it at or under 100 ms");
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 int main() { try {
   CHECK(process_loopback_candidate(10, 19041)); // updated Windows 10 version 2004
@@ -63,7 +64,6 @@ int main() { try {
     // Coarse Windows 10 timers (~15.6 ms passes plus snapshot work) must still keep real time.
     // Previously only one 10 ms quantum left per pass, so output fell behind and capture stopped.
     const std::uint64_t origin = 1000000000, delay = OutputClock::default_delay, pass = 186000; // 18.6 ms
-    CHECK(delay <= 1000000); // lookahead is audible latency; keep it at or under 100 ms
     OutputClock clock(origin);
     std::uint64_t now = origin; int resyncs = 0; std::int64_t emitted = 0;
     for (int i = 0; i < 2000; ++i) { // ~37 s
