@@ -94,22 +94,33 @@ std::uint64_t created(HANDLE h) {
   return (static_cast<std::uint64_t>(a.dwHighDateTime) << 32) | a.dwLowDateTime;
 }
 Processes snapshot() {
+  // Image paths are immutable for a (pid, creation time) identity; cache them so the
+  // per-pass snapshot stays cheap on systems with hundreds of processes.
+  static std::map<std::pair<DWORD, std::uint64_t>, std::string> images;
   Handle snap(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
   if (snap.value == INVALID_HANDLE_VALUE) throw std::runtime_error("Cannot enumerate process identities");
   PROCESSENTRY32W entry{}; entry.dwSize = sizeof(entry);
   Processes out;
+  std::map<std::pair<DWORD, std::uint64_t>, std::string> seen;
   if (!Process32FirstW(snap.value, &entry)) throw std::runtime_error("Cannot read process snapshot");
   do {
     Process p{entry.th32ProcessID, entry.th32ParentProcessID, 0, ""};
     Handle handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, p.pid));
     if (handle.value) {
-      wchar_t path[32768]; DWORD len = 32768;
       p.created = created(handle.value);
-      if (QueryFullProcessImageNameW(handle.value, 0, path, &len)) p.image = utf8(std::wstring(path, len));
+      auto key = std::make_pair(p.pid, p.created);
+      auto cached = images.find(key);
+      if (p.created && cached != images.end()) p.image = cached->second;
+      else {
+        wchar_t path[32768]; DWORD len = 32768;
+        if (QueryFullProcessImageNameW(handle.value, 0, path, &len)) p.image = utf8(std::wstring(path, len));
+      }
+      if (p.created && !p.image.empty()) seen.emplace(key, p.image);
     }
     out.push_back(std::move(p));
   } while (Process32NextW(snap.value, &entry));
   if (GetLastError() != ERROR_NO_MORE_FILES) throw std::runtime_error("Process snapshot incomplete");
+  images = std::move(seen);
   return out;
 }
 
@@ -367,12 +378,14 @@ void run_capture(Source source) {
   Output output;
   std::cerr << "{\"type\":\"ready\",\"sampleRate\":48000,\"channels\":2,\"scope\":\""
     << (source.scope == Scope::application ? "application" : "display") << "\"}\n" << std::flush;
-  auto origin = qpc_100ns(); std::int64_t frame = 0;
+  // 200 ms timestamp-aligned quarantine/lookahead; skip (never emit) audio more than 250 ms late.
+  OutputClock clock(qpc_100ns(), 2000000, 2500000);
   std::uint64_t next_sessions = 0;
   std::vector<std::uint32_t> sessions;
   std::set<std::pair<DWORD, std::uint64_t>> tainted;
-  constexpr std::uint64_t delay = 2000000; // 200 ms timestamp-aligned quarantine/lookahead
   while (!stopping()) {
+    // Audio captured before this instant is covered by the exclusion check below.
+    auto checked = qpc_100ns();
     current = snapshot(); ps = history.update(current, own);
     auto now = qpc_100ns();
     std::vector<std::uint32_t> wanted;
@@ -410,15 +423,17 @@ void run_capture(Source source) {
       }
       streams.emplace(pid, std::make_unique<Capture>(*p));
     }
-    for (auto& stream : streams) stream.second->drain(origin);
+    for (auto& stream : streams) stream.second->drain(clock.origin());
     now = qpc_100ns();
-    if (now > origin + delay + static_cast<std::uint64_t>(frame) * 10000000 / 48000 + 5000000)
-      throw std::runtime_error("Capture clock fell behind; stopping rather than emitting stale audio");
-    // At most one quantum per snapshot: refresh exclusion before every output block.
-    if (now >= origin + delay + static_cast<std::uint64_t>(frame + 480) * 10000000 / 48000) {
+    // A stalled pass drops stale audio (a short gap) rather than emitting it late or failing.
+    clock.resync(now);
+    // Emit every due quantum, but only audio captured before this pass's exclusion check.
+    constexpr auto block = static_cast<std::size_t>(OutputClock::quantum);
+    while (clock.ready(now, checked)) {
+      auto start = clock.advance();
       std::vector<std::vector<float>> inputs;
-      for (auto& stream : streams) inputs.push_back(stream.second->timeline.take(frame, 480));
-      output.push(mix(inputs, 480)); frame += 480;
+      for (auto& stream : streams) inputs.push_back(stream.second->timeline.take(start, block));
+      output.push(mix(inputs, block));
     }
     WaitForSingleObject(stop_event, 5);
   }

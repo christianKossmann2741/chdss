@@ -59,6 +59,44 @@ int main() { try {
   CHECK((output == std::vector<float>{0, 0, 0.25f, -0.25f, 0.5f, -0.5f, 0, 0}));
   CHECK((t.take(104, 2) == std::vector<float>{0, 0, 0, 0}));
   CHECK((mix({{0.75f, -0.75f}, {0.75f, -0.75f}}, 1) == std::vector<float>{1, -1}));
+  {
+    // Coarse Windows 10 timers (~15.6 ms passes plus snapshot work) must still keep real time.
+    // Previously only one 10 ms quantum left per pass, so output fell behind and capture stopped.
+    const std::uint64_t origin = 1000000000, delay = 2000000, pass = 186000; // 18.6 ms
+    OutputClock clock(origin, delay, 2500000);
+    std::uint64_t now = origin; int resyncs = 0; std::int64_t emitted = 0;
+    for (int i = 0; i < 2000; ++i) { // ~37 s
+      auto checked = now; now += pass;
+      if (clock.resync(now)) ++resyncs;
+      while (clock.ready(now, checked)) {
+        auto start = clock.advance();
+        CHECK(origin + static_cast<std::uint64_t>(start + OutputClock::quantum) * 10000000 / 48000 <= checked); // never audio newer than the check
+        emitted += OutputClock::quantum;
+      }
+      if (now < origin + delay + pass) continue; // still inside the initial quarantine
+      auto lag = static_cast<std::int64_t>(now - origin - delay) * 48000 / 10000000 - clock.frame();
+      CHECK(lag >= 0 && lag < 48000 * 3 / 100); // stays within ~30 ms of real time
+    }
+    CHECK(resyncs == 0);
+    CHECK(emitted == clock.frame() && emitted > 48000 * 36);
+    // A multi-second stall (e.g. activating a new application's loopback) skips stale audio and continues.
+    auto checked = now; now += 30000000; // 3 s
+    CHECK(clock.resync(now));
+    auto before = clock.frame();
+    CHECK(!clock.ready(now, checked)); // audio from the stall is newer than the last exclusion check
+    checked = now; now += pass;
+    CHECK(!clock.resync(now));
+    int burst = 0;
+    while (clock.ready(now, checked)) { clock.advance(); ++burst; }
+    CHECK(burst >= 1 && burst <= 27);
+    CHECK(clock.frame() > before);
+    auto lag = static_cast<std::int64_t>(now - origin - delay) * 48000 / 10000000 - clock.frame();
+    CHECK(lag >= 0 && lag < 48000 / 4);
+    // Nothing is due before the quarantine elapses.
+    OutputClock fresh(origin, delay, 2500000);
+    CHECK(!fresh.ready(origin + delay, origin + delay));
+    CHECK(fresh.ready(origin + delay + 100000, origin + delay));
+  }
   std::cout << "{\"type\":\"test-result\",\"suite\":\"windows-audio-policy\",\"success\":true}\n";
   return 0;
 } catch (const std::exception& e) {

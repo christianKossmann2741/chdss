@@ -171,6 +171,34 @@ public:
     return out;
   }
 };
+// Paces 10 ms output quanta against the capture clock (QPC, 100 ns ticks).
+// Rule 1: never emit audio captured after the most recent exclusion check (`checked`).
+// Rule 2: a slow loop pass (coarse ~15.6 ms Windows timers, process snapshots, session
+// enumeration, activating a new application) catches up; beyond `max_lag` the stale
+// audio is skipped instead of being emitted late or ending the share.
+class OutputClock {
+  std::uint64_t origin_, delay_, max_lag_;
+  std::int64_t frame_ = 0;
+  static std::uint64_t ticks(std::int64_t frames) { return static_cast<std::uint64_t>(frames) * 10000000 / 48000; }
+  static std::int64_t frames(std::uint64_t ticks) { return static_cast<std::int64_t>(ticks * 48000 / 10000000); }
+public:
+  static constexpr std::int64_t quantum = 480;
+  OutputClock(std::uint64_t origin, std::uint64_t delay, std::uint64_t max_lag) : origin_(origin), delay_(delay), max_lag_(max_lag) {}
+  std::uint64_t origin() const { return origin_; }
+  std::int64_t frame() const { return frame_; }
+  // Returns true when stale audio was skipped to restore real time.
+  bool resync(std::uint64_t now) {
+    if (now < origin_ + delay_ + ticks(frame_) + max_lag_) return false;
+    auto due = frames(now - origin_ - delay_) / quantum * quantum;
+    frame_ = std::max(frame_, due - quantum);
+    return true;
+  }
+  bool ready(std::uint64_t now, std::uint64_t checked) const {
+    auto end = ticks(frame_ + quantum);
+    return now >= origin_ + delay_ + end && origin_ + end <= checked;
+  }
+  std::int64_t advance() { auto start = frame_; frame_ += quantum; return start; }
+};
 inline std::vector<float> mix(const std::vector<std::vector<float>>& inputs, std::size_t frames) {
   std::vector<float> out(frames * 2, 0.0f);
   for (auto& input : inputs) {
